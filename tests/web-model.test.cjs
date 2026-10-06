@@ -2,11 +2,12 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {zipSync,strToU8}=require('fflate');
 const model=()=>import('../web/model.mjs');
-test('通用版迁移保留待确认线索、拒绝缺失附件与不支持的决策记录',async()=>{
+test('通用版迁移保留待确认线索、保存选择记录与拒绝缺失附件',async()=>{
   const {backupPayload}=await model();
   const desktop={version:1,entries:[{id:'desktop-test',sourceKey:'desktop:test',day:'2026-10-06',time:'12:30',title:'订单不是实际食用',body:'来自导出文件',source:'activity',confirmed:false,media:[]}],decisions:[]};
   const parsed=backupPayload(desktop);assert.equal(parsed.entries[0].confirmed,false);assert.equal(parsed.entries[0].sourceKey,'desktop:test');
-  assert.throws(()=>backupPayload({...desktop,decisions:[{title:'不能静默忽略'}]}),/决策/);
+  const choice={id:'choice',title:'选择新方向',day:'2026-10-06',status:'thinking',evidenceIds:['desktop-test']};assert.equal(backupPayload({...desktop,decisions:[choice]}).decisions[0].evidenceIds[0],'desktop-test');
+  assert.throws(()=>backupPayload({...desktop,decisions:[{title:'不能静默忽略'}]}),/日期/);
   assert.throws(()=>backupPayload({...desktop,entries:[{...desktop.entries[0],media:[{key:'cloud-only'}]}]}),/云端/);
   const entry={...desktop.entries[0],attachmentId:'photo'};
   assert.throws(()=>backupPayload({format:'life-archive-web',version:1,entries:[entry],attachments:[]}),/缺少附件/);

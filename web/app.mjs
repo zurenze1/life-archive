@@ -1,15 +1,18 @@
 import {MAX_FILE,MAX_BACKUP,localParts,normalizeEntry,backupPayload,filterEntries,sniffType,recordingMime} from './model.mjs';
 import {allEntries,getAttachment,saveBatch,openDb,getSetting,setSetting,claimReminder} from './db.mjs';
 const $=id=>document.getElementById(id);
+$('entry-metadata').innerHTML=LifeArchiveStudio.fields('entry');
+const studio=LifeArchiveStudio.start({load:async()=>({entries:await allEntries(),decisions:await getSetting('decisions',[])}),saveDecision:async d=>{const list=await getSetting('decisions',[]);const index=list.findIndex(x=>x.id===d.id);if(index<0)list.push(d);else list[index]=d;await setSetting('decisions',list);},edit:id=>openEditor(id),toast});
+for(const b of document.querySelectorAll('[data-page]'))b.onclick=async()=>{const name=b.dataset.page;document.querySelectorAll('[data-page]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-timeline]').forEach(x=>x.hidden=name!=='timeline');$('life-studio').hidden=name==='timeline';if(name!=='timeline')await studio.activate(name);};
 const kinds={note:'文字',image:'照片',audio:'录音',video:'视频',document:'文档',imported:'导入线索'};
-let entries=[],limit=80,busy=false,editing=null,previewUrls=[],backupUrls=[],installer=null,recorder=null,stream=null,timer=null,recordSeconds=0,recordPending=false;
+let entries=[],limit=80,busy=false,editing=null,previewUrls=[],backupUrls=[],installer=null,decisions=[],recorder=null,stream=null,timer=null,recordSeconds=0,recordPending=false;
 const node=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;};
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toast.timeout);toast.timeout=setTimeout(()=>$('toast').hidden=true,7000);}
 function problem(error){toast(error?.message??'这次操作没有完成，请重试。');}
 async function job(fn){if(busy){toast('正在处理材料，请稍等。');return;}if(recorder?.state==='recording'){toast('请先停止并保存录音，再处理其他材料。');return;}busy=true;try{await fn();}catch(error){problem(error);}finally{busy=false;}}
 function show(id){if(!$(id).open)$(id).showModal();}
 function revokePreviews(){previewUrls.forEach(URL.revokeObjectURL);previewUrls=[];}
-async function refresh(){entries=await allEntries();render();}
+async function refresh(){entries=await allEntries();decisions=await getSetting('decisions',[]);render();await studio.update();}
 function render(){
   const filters={query:$('search').value,kind:$('kind').value,day:$('day').value};
   const matches=filterEntries(entries,filters);const total=entries.filter(e=>!e.deletedAt).length;
@@ -20,9 +23,9 @@ function render(){
   for(const e of matches.slice(0,limit)){
     const article=node('article','record');const date=node('div','record-date',e.day.slice(0,4));date.append(node('strong','',e.day.slice(5)),node('span','',e.time));
     const copy=node('div','');const h=node('h3','');h.append(node('span','badge',kinds[e.kind]??'线索'),document.createTextNode(e.title));
-    const p=node('p','',e.body.slice(0,230)||e.fileName||'留下一份原始材料，等待以后回看。');
+    if(e.legacy?.pinned)h.append(node('span','badge','置顶'));const p=node('p','',e.body.slice(0,230)||e.fileName||'留下一份原始材料，等待以后回看。');
     const foot=node('div','record-footer');foot.append(node('span','',e.source),node('span',e.confirmed?'':'pending',e.confirmed?'已确认':'待确认线索'));
-    const edit=node('button','link-button','查看 / 修改 →');edit.type='button';edit.onclick=()=>openEditor(e.id);foot.append(edit);copy.append(h,p,foot);article.append(date,copy);host.append(article);
+    const edit=node('button','link-button','查看 / 修改 →');edit.type='button';edit.onclick=()=>openEditor(e.id);foot.append(edit);const tags=node('div','record-tags');for(const t of [...(e.legacy?.people??[]),...(e.legacy?.tags??[])])tags.append(node('span','',t));copy.append(h,p,tags,foot);article.append(date,copy);host.append(article);
   }
 }
 async function openEditor(id=null){
@@ -30,7 +33,7 @@ async function openEditor(id=null){
   try{
     editing=id?entries.find(e=>e.id===id):null;revokePreviews();const parts=editing??localParts();
     $('editor-title').textContent=editing?'回看这一条线索':'留住这一刻';$('entry-title').value=editing?.title??'';$('entry-body').value=editing?.body??'';$('entry-day').value=parts.day;$('entry-time').value=parts.time;$('entry-confirmed').checked=editing?editing.confirmed:true;$('remove-entry').hidden=!editing;
-    $('attachment').replaceChildren();$('entry-source').textContent=editing?[editing.source,editing.detail].filter(Boolean).join(' · '):'文字记录由你确认；也可以只写一个标题。';show('editor');
+    $('attachment').replaceChildren();LifeArchiveStudio.fillFields('entry',editing?.legacy??{});$('entry-source').textContent=editing?[editing.source,editing.detail].filter(Boolean).join(' · '):'文字记录由你确认；也可以只写一个标题。';show('editor');
     if(editing?.attachmentId){
       const e=editing;const attachment=await getAttachment(e.attachmentId);if(editing?.id!==e.id||!$('editor').open)return;
       if(!attachment?.blob){$('attachment').append(node('p','','原件暂不可读，请保留备份并重新导入。'));return;}
@@ -81,14 +84,14 @@ function blobBase64(blob){return new Promise((resolve,reject)=>{const r=new File
 function base64Blob(data,type,size){const raw=atob(data);if(raw.length!==size)throw new Error('备份附件长度不匹配，未导入');const bytes=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);return new Blob([bytes],{type});}
 async function exportBackup(){
   await refresh();const downloads=$('backup-downloads');downloads.replaceChildren();backupUrls.forEach(URL.revokeObjectURL);backupUrls=[];
-  if(!entries.length)return toast('当前没有需要备份的记录。');
+  if(!entries.length&&!decisions.length)return toast('当前没有需要备份的记录。');
   const groups=[];let group=[],estimate=0;
-  for(const e of entries){const size=new TextEncoder().encode(JSON.stringify(e)).length+(e.attachmentId?4*Math.ceil(e.fileSize/3)+500:0);if(group.length&&(estimate+size>80*1024*1024||group.length>=1000)){groups.push(group);group=[];estimate=0;}group.push(e);estimate+=size;}if(group.length)groups.push(group);
+  for(const e of entries){const size=new TextEncoder().encode(JSON.stringify(e)).length+(e.attachmentId?4*Math.ceil(e.fileSize/3)+500:0);if(group.length&&(estimate+size>80*1024*1024||group.length>=1000)){groups.push(group);group=[];estimate=0;}group.push(e);estimate+=size;}if(group.length)groups.push(group);if(!groups.length&&decisions.length)groups.push([]);
   for(let i=0;i<groups.length;i++){
     $('progress').textContent=`正在准备完整备份 ${i+1}/${groups.length}…`;
     const records=groups[i],attachments=[];
     for(const e of records)if(e.attachmentId){const a=await getAttachment(e.attachmentId);if(!a?.blob)throw new Error('一份原件缺失，完整备份未完成，请先检查该记录');attachments.push({id:a.id,name:a.name,type:a.type,size:a.blob.size,data:await blobBase64(a.blob)});}
-    const blob=new Blob([JSON.stringify({format:'life-archive-web',version:1,exportedAt:new Date().toISOString(),part:i+1,parts:groups.length,entries:records,attachments})],{type:'application/json'});if(blob.size>MAX_BACKUP)throw new Error('本部分备份过大，请减少本次记录数量后重试');
+    const blob=new Blob([JSON.stringify({format:'life-archive-web',version:2,exportedAt:new Date().toISOString(),part:i+1,parts:groups.length,entries:records,attachments,decisions:i===0?decisions:[]})],{type:'application/json'});if(blob.size>MAX_BACKUP)throw new Error('本部分备份过大，请减少本次记录数量后重试');
     const url=URL.createObjectURL(blob);backupUrls.push(url);const a=node('a','','下载备份'+(groups.length>1?` ${i+1}/${groups.length}`:'')+`（${(blob.size/1024/1024).toFixed(2)} MB）`);a.href=url;a.download=`人生档案-${localParts().day}${groups.length>1?'-'+(i+1):''}.json`;const p=node('p','');p.append(a);downloads.append(p);
   }
   $('progress').textContent=`完整备份已准备，共 ${groups.length} 个文件，请在“备份与迁移”窗口逐个下载。`;
@@ -96,15 +99,15 @@ async function exportBackup(){
 }
 async function importBackup(file){
   if(file.size>MAX_BACKUP)throw new Error('备份超过 100 MB，请使用分批导出的文件');
-  const value=backupPayload(JSON.parse(await file.text()));await refresh();
-  const used=new Set(entries.map(e=>e.sourceKey||'id:'+e.id));const knownIds=new Set(entries.map(e=>e.id));const records=[];const requestedAttachments=new Set();let skipped=0;
-  for(const e of value.entries){const fingerprint=()=>crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([e.day,e.time,e.title,e.body]))).then(buffer=>[...new Uint8Array(buffer)].map(b=>b.toString(16).padStart(2,'0')).join(''));const key=e.sourceKey||(e.id?'id:'+e.id:'import:'+await fingerprint());if(used.has(key)){skipped++;continue;}used.add(key);const id=e.id&&!knownIds.has(e.id)?e.id:crypto.randomUUID();knownIds.add(id);const copy={...e,id,sourceKey:key};records.push(copy);if(copy.attachmentId)requestedAttachments.add(copy.attachmentId);}
+  const parsed=JSON.parse(await file.text());const value=parsed.buckets?LifeArchiveLife.activityWatch(parsed):backupPayload(parsed);await refresh();
+  const used=new Set(entries.map(e=>e.sourceKey||'id:'+e.id));const knownIds=new Set(entries.map(e=>e.id));const idMap=new Map();const records=[];const requestedAttachments=new Set();let skipped=0;
+  for(const e of value.entries){const fingerprint=()=>crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([e.day,e.time,e.title,e.body]))).then(buffer=>[...new Uint8Array(buffer)].map(b=>b.toString(16).padStart(2,'0')).join(''));const key=e.sourceKey||(e.id?'id:'+e.id:'import:'+await fingerprint());if(used.has(key)){const old=entries.find(x=>(x.sourceKey||'id:'+x.id)===key);if(old)idMap.set(e.id,old.id);skipped++;continue;}used.add(key);const id=e.id&&!knownIds.has(e.id)?e.id:crypto.randomUUID();knownIds.add(id);idMap.set(e.id,id);const copy={...e,id,sourceKey:key};records.push(copy);if(copy.attachmentId)requestedAttachments.add(copy.attachmentId);}
   const attachments=[];
   const attachmentMap=new Map();for(const a of value.attachments){if(!requestedAttachments.has(a.id))continue;const id=crypto.randomUUID();attachmentMap.set(a.id,id);const type=sniffType({name:a.name??'',type:a.type??''}).mime;attachments.push({id,name:String(a.name??'原始附件').slice(0,300),type,blob:base64Blob(a.data,type,a.size)});}
   for(const e of records)if(e.attachmentId){e.attachmentId=attachmentMap.get(e.attachmentId);const a=attachments.find(a=>a.id===e.attachmentId);e.fileType=a.type;e.fileSize=a.blob.size;e.fileName=a.name;e.kind=sniffType({name:a.name,type:a.type}).kind;}
-  await saveBatch(records,attachments);await refresh();$('progress').textContent=`已导入 ${records.length} 条记录，跳过 ${skipped} 条重复记录。`;toast($('progress').textContent);
+  const restored=[...decisions];for(const d of value.decisions??[]){if(restored.some(x=>x.id===d.id))continue;restored.push({...d,id:d.id||crypto.randomUUID(),evidenceIds:d.evidenceIds.map(id=>idMap.get(id)??id)});}await saveBatch(records,attachments,{decisions:restored});await refresh();$('progress').textContent=`已导入 ${records.length} 条记录，跳过 ${skipped} 条重复记录，保留 ${restored.length} 条选择记录。`;toast($('progress').textContent);
 }
-async function dataDialog(){try{show('data-dialog');await refresh();const deleted=entries.filter(e=>e.deletedAt);$('trash-count').textContent=String(deleted.length);$('trash').replaceChildren();for(const e of deleted.slice(0,100)){const row=node('div','trash-row');row.append(node('span','',e.title));const button=node('button','quiet','恢复');button.onclick=()=>job(async()=>{await saveBatch([{...e,deletedAt:null,updatedAt:new Date().toISOString()}]);await dataDialog();toast('这条记录已恢复。');});row.append(button);$('trash').append(row);}if(deleted.length>100)$('trash').append(node('p','small','每次显示 100 条，恢复后继续查看。'));await storageStatus();}catch(error){problem(error);}}
+async function dataDialog(){try{show('data-dialog');await refresh();const deleted=entries.filter(e=>e.deletedAt);$('trash-count').textContent=String(deleted.length);$('trash').replaceChildren();for(const e of deleted.slice(0,100)){const row=node('div','trash-row');row.append(node('span','',e.title));const button=node('button','quiet','恢复');button.onclick=()=>job(async()=>{await saveBatch([{...e,deletedAt:null,updatedAt:new Date().toISOString()}]);await dataDialog();toast('这条记录已恢复。');});row.append(button);$('trash').append(row);}if(deleted.length>100)$('trash').append(node('p','small','每次显示 100 条，恢复后继续查看。'));$('decision-trash').replaceChildren();for(const d of decisions.filter(x=>x.deletedAt)){const row=node('div','trash-row');row.append(node('span','',d.title));const b=node('button','quiet','恢复选择');b.onclick=()=>job(async()=>{await setSetting('decisions',decisions.map(x=>x.id===d.id?{...x,deletedAt:null}:x));await dataDialog();});row.append(b);$('decision-trash').append(row);}await storageStatus();}catch(error){problem(error);}}
 async function storageStatus(){const estimate=await navigator.storage?.estimate?.();const persisted=await navigator.storage?.persisted?.();$('storage-status').textContent=(estimate?`已用约 ${(estimate.usage/1024/1024).toFixed(1)} MB · `:'')+(persisted?'浏览器已同意保留':'仍需定期备份');}
 function endMic(){clearInterval(timer);stream?.getTracks().forEach(t=>t.stop());stream=null;recordPending=false;$('record').classList.remove('recording');$('record').replaceChildren(node('span','','●'),node('strong','','说一段话'),node('small','','点击录音，保存原始声音'));}
 async function recordAudio(){
@@ -126,7 +129,7 @@ for(const input of ['file-input','camera-input'])$(input).onchange=()=>{const fi
 $('entry-form').onsubmit=event=>{event.preventDefault();job(async()=>{
   const body=$('entry-body').value.trim(),title=$('entry-title').value.trim()||body.split(/[\n。！？]/)[0]?.slice(0,100)||editing?.fileName;
   if(!title&&!body)throw new Error('写一点内容、一个标题，或者先导入原件。');
-  const e=normalizeEntry({...editing,id:editing?.id??crypto.randomUUID(),sourceKey:editing?.sourceKey??'note:'+crypto.randomUUID(),title,body,day:$('entry-day').value,time:$('entry-time').value,kind:editing?.kind??'note',source:editing?.source??'主动记录',confirmed:$('entry-confirmed').checked});
+  const e=normalizeEntry({...editing,id:editing?.id??crypto.randomUUID(),sourceKey:editing?.sourceKey??'note:'+crypto.randomUUID(),title,body,day:$('entry-day').value,time:$('entry-time').value,kind:editing?.kind??'note',source:editing?.source??'主动记录',confirmed:$('entry-confirmed').checked,legacy:LifeArchiveStudio.readFields('entry')});
   await saveBatch([e]);if(e.kind==='note'&&e.day===LifeArchiveReminders.localDay())await setSetting('diaryReminderState',LifeArchiveReminders.respond(await getSetting('diaryReminderState',{}),'done'));$('editor').close();await refresh();toast('这一刻已经留下。');
 });};
 $('remove-entry').onclick=()=>job(async()=>{if(!editing)return;await saveBatch([{...editing,deletedAt:new Date().toISOString()}]);$('editor').close();await refresh();toast('已移到回收站，可在“备份与迁移”恢复。');});
@@ -163,3 +166,5 @@ async function respondToReminder(action){try{if(action==='disable')await setSett
 for(const [id,action] of [['reminder-write','write'],['reminder-snooze','snooze'],['reminder-done','done'],['reminder-disable','disable']])$(id).onclick=()=>respondToReminder(action);$('reminder-prompt').addEventListener('cancel',event=>{event.preventDefault();respondToReminder('snooze');});
 $('reminder-calendar').onclick=()=>job(async()=>{const prefs=reminderForm();const contents=R.calendar(prefs);await setSetting('diaryReminder',prefs);if(calendarUrl)URL.revokeObjectURL(calendarUrl);calendarUrl=URL.createObjectURL(new Blob([contents],{type:'text/calendar;charset=utf-8'}));const link=node('a','','下载日记提醒.ics，再用系统日历打开');link.href=calendarUrl;link.download='人生档案-每日日记提醒.ics';$('calendar-download').replaceChildren(link);await reminderStatus();toast('请下载并导入系统日历，导入后可在日历中管理。');});
 window.addEventListener('focus',checkDiaryReminder);document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDiaryReminder();});
+
+const cinema=document.querySelector('.archive-cinema video'),motion=matchMedia('(prefers-reduced-motion: reduce)');function syncCinema(){if(document.hidden||motion.matches)cinema.pause();else cinema.play().catch(()=>{});}document.addEventListener('visibilitychange',syncCinema);motion.addEventListener('change',syncCinema);syncCinema();

@@ -1,7 +1,7 @@
 {
   "name": "life-archive-desktop",
   "productName": "人生档案",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "在自己的电脑上自动整理可授权读取的生活线索",
   "main": "main.cjs",
   "author": "Life Archive contributors",
@@ -14,7 +14,7 @@
     "diagnose": "node scripts/diagnose.cjs",
     "site:build": "node scripts/build-site.cjs",
     "site:check": "node scripts/check-site.cjs",
-    "web:check": "node --check web/app.mjs && node --check web/sw.js && node --check web/db.mjs && node --check web/model.mjs && node --check web/documents.mjs"
+    "web:check": "node --check web/app.mjs && node --check web/sw.js && node --check web/db.mjs && node --check web/model.mjs && node --check web/documents.mjs && node --check web/life.js && node --check web/studio.js"
   },
   "dependencies": {
     "koffi": "^2.15.1",
@@ -39,7 +39,11 @@
       "package.json",
       "README.md",
       "web/reminders.js",
-      "LICENSE"
+      "LICENSE",
+      "web/life.js",
+      "web/studio.js",
+      "web/studio.css",
+      "web/scene/**"
     ],
     "asarUnpack": [
       "node_modules/koffi/**"

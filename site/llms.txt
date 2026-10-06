@@ -3,7 +3,7 @@
 免费开源、面向每个人的生活记录工具。MIT 许可，无需注册，档案保存在使用者当前设备。
 
 - [通用版](https://zurenze1.github.io/life-archive/app/)
-- [Mac 版](https://github.com/zurenze1/life-archive/releases/tag/v1.2.0)
+- [Mac 版](https://github.com/zurenze1/life-archive/releases/tag/v1.3.0)
 - [源码与 MIT 许可](https://github.com/zurenze1/life-archive)
 - [日记提醒与功能说明](https://zurenze1.github.io/life-archive/faq/)
 

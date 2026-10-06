@@ -1,5 +1,5 @@
-import {unzipSync,strFromU8} from './vendor/fflate.mjs?v=6366242b0483';
-import {csv} from './model.mjs?v=6366242b0483';
+import {unzipSync,strFromU8} from './vendor/fflate.mjs?v=7865ea711740';
+import {csv} from './model.mjs?v=7865ea711740';
 const entities=s=>s.replace(/&#x([\da-f]+);/gi,(_,x)=>String.fromCodePoint(parseInt(x,16))).replace(/&#(\d+);/g,(_,x)=>String.fromCodePoint(Number(x))).replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
 const text=s=>entities(s.replace(/<\/(?:w:p|w:tr|si)>/g,'\n').replace(/<[^>]*>/g,' ')).replace(/[ \t]+/g,' ').replace(/ *\n */g,'\n').trim();
 export function office(bytes,extension){

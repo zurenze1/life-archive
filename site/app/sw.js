@@ -1,6 +1,6 @@
-const CACHE='life-archive-universal-6366242b0483';
-const CORE=['./','index.html','style.css','app.mjs','reminders.js','model.mjs','db.mjs','documents.mjs','doc-worker.mjs','manifest.webmanifest','icon-192.png','icon-512.png','icon-maskable.png','apple-touch-icon.png','vendor/fflate.mjs','vendor/pdf.mjs','vendor/pdf.worker.mjs'];
-self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE.map(p=>new Request(new URL(p+(/\.mjs$|\.css$/.test(p)?'?v=6366242b0483':''),self.registration.scope),{cache:'reload'})))).then(()=>self.skipWaiting())));
+const CACHE='life-archive-universal-7865ea711740';
+const CORE=['./','index.html','style.css','app.mjs','reminders.js','life.js','studio.js','studio.css','scene/door.mp4','model.mjs','db.mjs','documents.mjs','doc-worker.mjs','manifest.webmanifest','icon-192.png','icon-512.png','icon-maskable.png','apple-touch-icon.png','vendor/fflate.mjs','vendor/pdf.mjs','vendor/pdf.worker.mjs'];
+self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE.map(p=>new Request(new URL(p+(/\.(?:mjs|js|css)$/.test(p)?'?v=7865ea711740':''),self.registration.scope),{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('life-archive-universal-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url);

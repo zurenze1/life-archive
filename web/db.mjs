@@ -13,12 +13,13 @@ export function openDb(){
 }
 export async function allEntries(){const db=await openDb();return new Promise((resolve,reject)=>{const r=db.transaction('entries').objectStore('entries').getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
 export async function getAttachment(id){const db=await openDb();return new Promise((resolve,reject)=>{const r=db.transaction('attachments').objectStore('attachments').get(id);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
-export async function saveBatch(entries,attachments=[]){
+export async function saveBatch(entries,attachments=[],settings={}){
   const db=await openDb();return new Promise((resolve,reject)=>{
-    const tx=db.transaction(['entries','attachments'],'readwrite');
+    const tx=db.transaction(['entries','attachments','settings'],'readwrite');
     tx.oncomplete=()=>resolve();
     tx.onabort=()=>reject(new Error(tx.error?.name==='QuotaExceededError'?'设备存储空间不足，材料没有保存。请先备份档案，或减少文件大小。':'本次保存未完成，请重试。'));
     tx.onerror=()=>{};
+    for(const [key,value] of Object.entries(settings))tx.objectStore('settings').put({key,value});
     for(const a of attachments)tx.objectStore('attachments').put(a);
     for(const e of entries)tx.objectStore('entries').put(e);
   });

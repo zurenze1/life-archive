@@ -1,3 +1,4 @@
+const life=require('./web/life.js');
 const {app,BrowserWindow,ipcMain,dialog,shell,Tray,Menu,nativeImage,powerMonitor,systemPreferences,Notification}=require('electron');
 const fs=require('node:fs');
 const fsp=require('node:fs/promises');
@@ -29,7 +30,7 @@ app.whenReady().then(async()=>{
   setTimeout(()=>{sample();scan();},800);
 }).catch(error=>{dialog.showErrorBox('人生档案启动失败',clean(error.message,500));app.quit();});
 }
-function createWindow(){window=new BrowserWindow({width:1250,height:860,minWidth:900,minHeight:640,title:testData?'人生档案 · 隔离测试':'人生档案',backgroundColor:'#f5f4ee',autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});window.webContents.session.setPermissionRequestHandler((_wc,permission,callback,details)=>callback(permission==='media'&&details.mediaTypes?.every(type=>type==='audio')===true));window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(url!==window.webContents.getURL())event.preventDefault();});window.loadFile(path.join(__dirname,'ui/index.html'));window.on('close',event=>{if(!quitting){event.preventDefault();window.hide();}});}
+function createWindow(){window=new BrowserWindow({width:1250,height:860,minWidth:900,minHeight:640,title:testData?'人生档案 · 隔离测试':'人生档案',backgroundColor:'#11100e',autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});window.webContents.session.setPermissionRequestHandler((_wc,permission,callback,details)=>callback(permission==='media'&&details.mediaTypes?.every(type=>type==='audio')===true));window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(url!==window.webContents.getURL())event.preventDefault();});window.loadFile(path.join(__dirname,'ui/index.html'));window.on('close',event=>{if(!quitting){event.preventDefault();window.hide();}});}
 function show(){if(!window||window.isDestroyed())createWindow();window.show();window.focus();}
 function createTray(){const icon=nativeImage.createFromPath(path.join(__dirname,'ui/tray.png')).resize({width:18,height:18});icon.setTemplateImage(true);tray=new Tray(icon);tray.setToolTip('人生档案 · 本机采集');tray.setContextMenu(Menu.buildFromTemplate([{label:'打开人生档案',click:show},{label:'立即整理',click:()=>{show();scan();}},{type:'separator'},{label:'退出并停止采集',click:()=>app.quit()}]));tray.on('click',show);}
 async function scan(){if(!store.setting('tracking',true)||collector.running||suspended)return;try{await collector.scan();}catch(error){store.source('system',{name:'采集任务',status:'error',detail:'本次整理未完成：'+clean(error.message,180)});}}
@@ -72,10 +73,15 @@ handle('diary-save',value=>{
   const body=String(value?.body??'').trim();if(!body||body.length>20000)throw new Error('请填写日记内容（最多 20,000 字）');
   const day=String(value?.day??reminders.localDay());if(!/^\d{4}-\d{2}-\d{2}$/.test(day))throw new Error('日记日期无效');const date=new Date(day+'T12:00:00');if(!Number.isFinite(date.getTime())||reminders.localDay(date)!==day)throw new Error('日记日期无效');
   const now=new Date();if(day===reminders.localDay(now))date.setHours(now.getHours(),now.getMinutes(),now.getSeconds());
-  const key='diary:'+require('node:crypto').randomUUID();store.add({key,source:'diary',kind:'diary',title:String(value?.title??'').trim()||day+' 的日记',body,occurredAt:date,meta:{confirmed:true,evidence:'使用者主动记录'}});store.source('diary',{name:'我的日记',status:'ready',detail:'主动写下并确认的经历'});
+  const key='diary:'+require('node:crypto').randomUUID();store.add({key,source:'diary',kind:'diary',title:String(value?.title??'').trim()||day+' 的日记',body,occurredAt:date,meta:{...life.metadata(value?.meta),confirmed:true,evidence:'使用者主动记录'}});store.source('diary',{name:'我的日记',status:'ready',detail:'主动写下并确认的经历'});
   if(day===reminders.localDay(now))store.setSetting('diaryReminderState',reminders.respond(store.setting('diaryReminderState',{}),'done',now));diaryEditing=false;dismissReminder();return {ok:true};
 });
 
+
+handle('life-state',()=>{const data=store.export();return {entries:data.entries.map(e=>({...e,legacy:life.metadata(e)})),decisions:store.setting('decisions',[])};});
+handle('decision-save',value=>{const d=life.normalizeDecision(value),list=store.setting('decisions',[]);if(!d.id)throw Error('选择标识缺失');const index=list.findIndex(x=>x.id===d.id);if(index<0)list.push(d);else list[index]=d;store.setSetting('decisions',list);return {ok:true};});
+handle('record-detail',id=>{const row=store.db.prepare('SELECT id,title,body,occurred_at,kind,meta FROM records WHERE id=?').get(String(id));if(!row)throw Error('记录不存在');return {...row,meta:JSON.parse(row.meta)};});
+handle('record-metadata',value=>{const row=store.db.prepare('SELECT meta FROM records WHERE id=?').get(String(value?.id));if(!row)throw Error('记录不存在');const meta={...JSON.parse(row.meta),...life.metadata(value?.meta),confirmed:value?.confirmed===true};store.db.prepare('UPDATE records SET meta=? WHERE id=?').run(JSON.stringify(meta),String(value.id));return {ok:true};});
 handle('clear',async()=>{const result=await dialog.showMessageBox(window,{type:'warning',title:'清空本机档案',message:'删除本工具中的全部记录和录音？',detail:'电脑与手机中的源文件不受影响。清空后会暂停采集；删除的档案无法撤销，请先导出备份。',buttons:['取消','清空并暂停'],defaultId:0,cancelId:0});if(result.response!==1)return {cancelled:true};collector.cancelled=true;store.setSetting('tracking',false);session=null;if(collector.running)throw new Error('正在停止整理，请稍后再次清空。');store.db.exec("DELETE FROM records; DELETE FROM settings WHERE key LIKE 'file:%';");await fsp.rm(path.join(store.directory,'recordings'),{recursive:true,force:true});return {ok:true};});
 app.on('before-quit',()=>{quitting=true;timers.forEach(clearInterval);if(store){flushSession();collector.cancelled=true;}});
 app.on('window-all-closed',()=>{});

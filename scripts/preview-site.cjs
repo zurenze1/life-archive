@@ -3,7 +3,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const root=path.resolve(__dirname,'../site');
 const prefix='/life-archive/';
-const mime={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.mjs':'text/javascript','.json':'application/json','.webmanifest':'application/manifest+json','.png':'image/png','.xml':'application/xml','.txt':'text/plain','.bcmap':'application/octet-stream','.ttf':'font/ttf','.pfb':'application/octet-stream'};
+const mime={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.mjs':'text/javascript','.json':'application/json','.webmanifest':'application/manifest+json','.mp4':'video/mp4','.png':'image/png','.xml':'application/xml','.txt':'text/plain','.bcmap':'application/octet-stream','.ttf':'font/ttf','.pfb':'application/octet-stream'};
 const server=http.createServer((req,res)=>{
   let requested;try{requested=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{res.writeHead(400).end();return;}
   if(!requested.startsWith(prefix)){res.writeHead(404).end();return;}
