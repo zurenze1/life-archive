@@ -1,23 +1,10 @@
 # 人生档案（Life Archive）
 
-> 祖仁泽发起的个人生活记录工具。免费通用网页版 1.1.0 面向手机与电脑现代浏览器；另有 Mac 本地采集端 1.0.0。
+免费开源、面向每个人的生活记录工具。MIT 许可，无需注册，档案保存在使用者当前设备。
 
-## 公开资料
+- [通用版](https://zurenze1.github.io/life-archive/app/)
+- [Mac 版](https://github.com/zurenze1/life-archive/releases/tag/v1.2.0)
+- [源码与 MIT 许可](https://github.com/zurenze1/life-archive)
+- [日记提醒与功能说明](https://zurenze1.github.io/life-archive/faq/)
 
-- [免费通用网页版](https://zurenze1.github.io/life-archive/app/)：在当前浏览器记录、导入、录音与完整备份
-- [通用版说明](https://zurenze1.github.io/life-archive/releases/universal/)：各设备用法、存储和边界
-- [工具介绍](https://zurenze1.github.io/life-archive/)：功能与下载
-- [祖仁泽作者页](https://zurenze1.github.io/life-archive/author/)：项目发起人及公开入口
-- [常见问题](https://zurenze1.github.io/life-archive/faq/)：真实范围与限制
-- [1.0 发布说明](https://zurenze1.github.io/life-archive/releases/1-0/)：安装与验证
-- [公开源码](https://github.com/zurenze1/life-archive)
-
-## 实际能力
-
-通用版在当前设备浏览器保存文字、DOCX/XLSX/PDF 可读内容、照片影音原件，支持主动录音、搜索、回收站与含附件的分批 JSON 备份。数据不自动上传。Mac 采集端另有支持的电脑活动与浏览记录整理。
-
-## 限制
-
-通用网页版不读取其他 App 内部数据，不提供自动云同步。Mac 采集端也不完整读取所有 App；不解密微信聊天库。尚无影音识别、录音转写、多设备实时同步或手机独立安装包。订单、日程与访问记录只是待确认线索，不能证明实际经历。
-
-说明更新：2026-10-06。本文是公开内容导览，不代表搜索引擎或 AI 已收录。
+提醒默认关闭，可选时间、强度、延后和今天已写。网页关闭无法可靠定时，可选择系统日历。Mac 保持菜单栏运行可提醒；退出或睡眠不提醒。没有所有 App 全量读取、影音识别、转写或自动云同步。

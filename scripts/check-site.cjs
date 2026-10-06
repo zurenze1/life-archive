@@ -14,11 +14,10 @@ for (const file of files) {
   assert.equal(canonical, new URL(file.replace(/index\.html$/, ''), base).href);
   assert.equal((html.match(/<h1[ >]/g)||[]).length, 1, `${file}: one primary heading`);
   assert(html.includes('content="index,follow,max-image-preview:large"'));
-  assert(html.includes('name="author" content="祖仁泽"'));
-  assert(html.includes('祖仁泽'), `${file}: visible author`);
+  assert(!/personal-site|#person|name="author"/.test(html), `${file}: no personal branding`);
   const data=JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
   const entities = data['@graph'];
-  assert(entities.some(e=>e['@type']==='Person' && e.name==='祖仁泽'));
+  assert(!entities.some(e=>e['@type']==='Person'));
   for(const m of html.matchAll(/(?:href|src)="([^"]+)"/g)) {
     const u = new URL(m[1], canonical);
     if(u.hostname !== base.hostname || !u.pathname.startsWith(base.pathname)) continue;
@@ -37,7 +36,7 @@ const xml=fs.readFileSync(path.join(root,'sitemap.xml'),'utf8');
 const sitemap=new Set([...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map(m=>m[1]));
 assert.deepEqual(sitemap,canonicals,'Sitemap covers exactly the canonical pages');
 const facts=JSON.parse(fs.readFileSync(path.join(root,'facts.json'),'utf8'));
-assert.equal(facts.founder,'祖仁泽');
+assert.equal(facts.license,'MIT');assert.equal(facts.free,true);assert(!facts.founder);
 assert.equal(facts.url,base.href);
 assert.equal(fs.readFileSync(path.join(root,'assets/share.png')).subarray(1,4).toString(),'PNG');
 console.log(`Public site check passed: ${files.length} canonical HTML pages, ${links} internal references, valid JSON-LD, sitemap, share image and facts.`);

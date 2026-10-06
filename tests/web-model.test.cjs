@@ -26,8 +26,8 @@ test('通用版搜索排除回收站，日期不被自动纠正，录音类型�
 });
 test('浏览器 Office 解析保留空列与 Unicode，拒绝 ZIP 展开上限',async()=>{
   const {office,documentText}=await import('../web/documents.mjs');
-  const docx=zipSync({'word/document.xml':strToU8('<w:document><w:p><w:t>祖仁泽的测试课程</w:t></w:p><w:p><w:t>第二段</w:t></w:p></w:document>')});
-  assert.match(office(docx,'docx').text,/祖仁泽的测试课程\n第二段/);
+  const docx=zipSync({'word/document.xml':strToU8('<w:document><w:p><w:t>示例测试课程</w:t></w:p><w:p><w:t>第二段</w:t></w:p></w:document>')});
+  assert.match(office(docx,'docx').text,/示例测试课程\n第二段/);
   const xlsx=zipSync({'xl/worksheets/sheet1.xml':strToU8('<worksheet><row><c r="A1" t="inlineStr"><is><t>商品名称</t></is></c><c r="C1" t="inlineStr"><is><t>下单时间</t></is></c></row><row><c r="A2" t="inlineStr"><is><t>测试商品</t></is></c><c r="C2" t="inlineStr"><is><t>2026-10-06</t></is></c></row></worksheet>')});
   assert.match(office(xlsx,'xlsx').text,/测试商品 \|  \| 2026-10-06/);
   assert.throws(()=>office(zipSync({'word/document.xml':new Uint8Array(9*1024*1024)}),'docx'),/展开/);

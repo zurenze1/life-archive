@@ -1,14 +1,11 @@
 {
   "name": "life-archive-desktop",
   "productName": "人生档案",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "在自己的电脑上自动整理可授权读取的生活线索",
   "main": "main.cjs",
-  "author": {
-    "name": "祖仁泽",
-    "url": "https://zurenze1.github.io/life-archive/author/"
-  },
-  "license": "UNLICENSED",
+  "author": "Life Archive contributors",
+  "license": "MIT",
   "private": true,
   "scripts": {
     "start": "electron .",
@@ -40,7 +37,9 @@
       "core/**",
       "ui/**",
       "package.json",
-      "README.md"
+      "README.md",
+      "web/reminders.js",
+      "LICENSE"
     ],
     "asarUnpack": [
       "node_modules/koffi/**"
@@ -60,7 +59,7 @@
       }
     },
     "dmg": {
-      "title": "人生档案 1.0",
+      "title": "人生档案",
       "contents": [
         {
           "x": 130,

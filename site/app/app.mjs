@@ -1,5 +1,5 @@
-import {MAX_FILE,MAX_BACKUP,localParts,normalizeEntry,backupPayload,filterEntries,sniffType,recordingMime} from './model.mjs?v=ee68833afd5a';
-import {allEntries,getAttachment,saveBatch,openDb} from './db.mjs?v=ee68833afd5a';
+import {MAX_FILE,MAX_BACKUP,localParts,normalizeEntry,backupPayload,filterEntries,sniffType,recordingMime} from './model.mjs?v=6366242b0483';
+import {allEntries,getAttachment,saveBatch,openDb,getSetting,setSetting,claimReminder} from './db.mjs?v=6366242b0483';
 const $=id=>document.getElementById(id);
 const kinds={note:'文字',image:'照片',audio:'录音',video:'视频',document:'文档',imported:'导入线索'};
 let entries=[],limit=80,busy=false,editing=null,previewUrls=[],backupUrls=[],installer=null,recorder=null,stream=null,timer=null,recordSeconds=0,recordPending=false;
@@ -45,11 +45,11 @@ async function openEditor(id=null){
 }
 async function hashFile(file){const bytes=await file.arrayBuffer();const digest=await crypto.subtle.digest('SHA-256',bytes);return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');}
 function officeText(bytes,extension){return new Promise((resolve,reject)=>{
-  const worker=new Worker(new URL('./doc-worker.mjs?v=ee68833afd5a',import.meta.url),{type:'module'});const timeout=setTimeout(()=>{worker.terminate();reject(new Error('文档解析超时，仅保留原件'));},12000);
+  const worker=new Worker(new URL('./doc-worker.mjs?v=6366242b0483',import.meta.url),{type:'module'});const timeout=setTimeout(()=>{worker.terminate();reject(new Error('文档解析超时，仅保留原件'));},12000);
   const finish=()=>{clearTimeout(timeout);worker.terminate();};worker.onmessage=({data})=>{finish();data.error?reject(new Error(data.error)):resolve(data);};worker.onerror=()=>{finish();reject(new Error('当前浏览器无法解析此文档，原件仍可保存'));};worker.postMessage({bytes,extension},[bytes]);
 });}
 async function pdfText(file){
-  const pdf=await import('./vendor/pdf.mjs?v=ee68833afd5a');pdf.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.mjs?v=ee68833afd5a',import.meta.url).href;
+  const pdf=await import('./vendor/pdf.mjs?v=6366242b0483');pdf.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.mjs?v=6366242b0483',import.meta.url).href;
   const loading=pdf.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,standardFontDataUrl:new URL('./vendor/standard_fonts/',import.meta.url).href,cMapUrl:new URL('./vendor/cmaps/',import.meta.url).href,cMapPacked:true,disableFontFace:true});
   let timeout;const parse=async()=>{const doc=await loading.promise;const out=[];for(let i=1;i<=Math.min(doc.numPages,30);i++){const page=await doc.getPage(i);const text=await page.getTextContent();out.push(text.items.map(item=>item.str??'').join(' '));page.cleanup();}const text=out.join('\n').slice(0,30000);return {text,detail:text.trim()?'已提取 PDF 可读文字，最多 30 页；保留原件':'PDF 无可读文字层，仅保存原件，尚无扫描件 OCR'};};
   try{return await Promise.race([parse(),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('PDF 解析超时，仅保留原件')),20000);})]);}finally{clearTimeout(timeout);await loading.destroy();}
@@ -127,7 +127,7 @@ $('entry-form').onsubmit=event=>{event.preventDefault();job(async()=>{
   const body=$('entry-body').value.trim(),title=$('entry-title').value.trim()||body.split(/[\n。！？]/)[0]?.slice(0,100)||editing?.fileName;
   if(!title&&!body)throw new Error('写一点内容、一个标题，或者先导入原件。');
   const e=normalizeEntry({...editing,id:editing?.id??crypto.randomUUID(),sourceKey:editing?.sourceKey??'note:'+crypto.randomUUID(),title,body,day:$('entry-day').value,time:$('entry-time').value,kind:editing?.kind??'note',source:editing?.source??'主动记录',confirmed:$('entry-confirmed').checked});
-  await saveBatch([e]);$('editor').close();await refresh();toast('这一刻已经留下。');
+  await saveBatch([e]);if(e.kind==='note'&&e.day===LifeArchiveReminders.localDay())await setSetting('diaryReminderState',LifeArchiveReminders.respond(await getSetting('diaryReminderState',{}),'done'));$('editor').close();await refresh();toast('这一刻已经留下。');
 });};
 $('remove-entry').onclick=()=>job(async()=>{if(!editing)return;await saveBatch([{...editing,deletedAt:new Date().toISOString()}]);$('editor').close();await refresh();toast('已移到回收站，可在“备份与迁移”恢复。');});
 for(const id of ['backup','backup-top'])$(id).onclick=()=>dataDialog();$('help').onclick=()=>show('help-dialog');
@@ -143,4 +143,23 @@ async function init(){
   $('connection').textContent=navigator.onLine?'已联网':'离线使用';
   if('serviceWorker' in navigator){try{await navigator.serviceWorker.register('./sw.js');await navigator.serviceWorker.ready;$('connection').textContent=navigator.onLine?'离线已准备':'离线使用';}catch{$('connection').textContent='在线可用';}}
 }
-init();
+init().then(()=>{checkDiaryReminder();setInterval(checkDiaryReminder,10000);});
+
+let reminderPending=false,reminderPreview=false,reminderTickBusy=false,reminderAudio,calendarUrl;
+const R=globalThis.LifeArchiveReminders;
+function reminderForm(){return R.settings({enabled:$('reminder-enabled').checked,time:$('reminder-time').value,strong:$('reminder-strong').checked});}
+async function reminderStatus(){const p=R.settings(await getSetting('diaryReminder',{}));$('reminder-status').textContent=(p.enabled?'每天 '+p.time+' · '+(p.strong?'强提醒':'普通提醒'):'提醒已关闭')+' · 系统通知：'+(('Notification' in window)?({granted:'已允许',denied:'未允许',default:'未申请'}[Notification.permission]):'当前浏览器不支持');}
+function prepareSound(){try{reminderAudio??=new (window.AudioContext||window.webkitAudioContext)();reminderAudio.resume().catch(()=>{});}catch{}}
+function reminderSound(){if(!reminderAudio||reminderAudio.state!=='running')return;for(let i=0;i<3;i++){const oscillator=reminderAudio.createOscillator(),gain=reminderAudio.createGain(),t=reminderAudio.currentTime+i*.22;oscillator.frequency.value=660;gain.gain.setValueAtTime(.07,t);gain.gain.exponentialRampToValueAtTime(.001,t+.13);oscillator.connect(gain);gain.connect(reminderAudio.destination);oscillator.start(t);oscillator.stop(t+.15);}}
+async function fireDiaryReminder(test=false){if(reminderPending)return;const p=R.settings(await getSetting('diaryReminder',{}));reminderPending=true;reminderPreview=test;$('reminder-preview').textContent=test?'这是测试提醒，不会改变今天的记录状态。':'';p.strong?show('reminder-prompt'):$('reminder-prompt').show();if(p.strong)reminderSound();
+ if('Notification' in window&&Notification.permission==='granted'){try{const options={body:'留下一段今天的经历。可以稍后提醒，或确认今天已写。',tag:'life-archive-diary',silent:!p.strong,requireInteraction:p.strong,data:{url:location.href}};const registration=await navigator.serviceWorker?.getRegistration();if(registration)await registration.showNotification('该写今天的日记了',options);else{const n=new Notification('该写今天的日记了',options);n.onclick=()=>{window.focus();n.close();};}}catch{toast('系统通知未送达；应用内提醒仍可使用。');}}
+}
+async function checkDiaryReminder(){if(reminderTickBusy||reminderPending||busy||recorder?.state==='recording'||[...document.querySelectorAll('dialog')].some(d=>d.open))return;reminderTickBusy=true;try{const notes=await allEntries();if(notes.some(e=>e.kind==='note'&&!e.deletedAt&&e.day===R.localDay())){const state=await getSetting('diaryReminderState',{});if(state.ackDay!==R.localDay())await setSetting('diaryReminderState',R.respond(state,'done'));return;}if(await claimReminder())await fireDiaryReminder();}catch(error){problem(error);}finally{reminderTickBusy=false;}}
+$('reminder-settings').onclick=()=>job(async()=>{const p=R.settings(await getSetting('diaryReminder',{}));$('reminder-enabled').checked=p.enabled;$('reminder-time').value=p.time;$('reminder-strong').checked=p.strong;await reminderStatus();show('reminder-options');});
+$('reminder-form').onsubmit=event=>{event.preventDefault();if($('reminder-strong').checked)prepareSound();job(async()=>{await setSetting('diaryReminder',reminderForm());await reminderStatus();toast('提醒设置已保存');});};
+$('reminder-permission').onclick=async()=>{if(!('Notification' in window))return toast('此浏览器不支持系统通知，请使用应用内弹窗或系统日历。');try{await Notification.requestPermission();await reminderStatus();}catch{toast('请在浏览器或系统设置中允许通知。');}};
+$('reminder-test').onclick=()=>{prepareSound();$('reminder-options').close();fireDiaryReminder(true).catch(problem);};
+async function respondToReminder(action){try{if(action==='disable')await setSetting('diaryReminder',{...R.settings(await getSetting('diaryReminder',{})),enabled:false});if(!reminderPreview){if(action!=='disable'&&action!=='write')await setSetting('diaryReminderState',R.respond(await getSetting('diaryReminderState',{}),action));}reminderPending=false;reminderPreview=false;$('reminder-prompt').close();const registration=await navigator.serviceWorker?.getRegistration();if(registration)for(const notification of await registration.getNotifications({tag:'life-archive-diary'}))notification.close();if(action==='write'){openEditor();$('editor-title').textContent='写下今天的日记';$('entry-confirmed').checked=true;}}catch(error){problem(error);}}
+for(const [id,action] of [['reminder-write','write'],['reminder-snooze','snooze'],['reminder-done','done'],['reminder-disable','disable']])$(id).onclick=()=>respondToReminder(action);$('reminder-prompt').addEventListener('cancel',event=>{event.preventDefault();respondToReminder('snooze');});
+$('reminder-calendar').onclick=()=>job(async()=>{const prefs=reminderForm();const contents=R.calendar(prefs);await setSetting('diaryReminder',prefs);if(calendarUrl)URL.revokeObjectURL(calendarUrl);calendarUrl=URL.createObjectURL(new Blob([contents],{type:'text/calendar;charset=utf-8'}));const link=node('a','','下载日记提醒.ics，再用系统日历打开');link.href=calendarUrl;link.download='人生档案-每日日记提醒.ics';$('calendar-download').replaceChildren(link);await reminderStatus();toast('请下载并导入系统日历，导入后可在日历中管理。');});
+window.addEventListener('focus',checkDiaryReminder);document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDiaryReminder();});

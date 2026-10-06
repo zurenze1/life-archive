@@ -1,6 +1,6 @@
-const CACHE='life-archive-universal-ee68833afd5a';
-const CORE=['./','index.html','style.css','app.mjs','model.mjs','db.mjs','documents.mjs','doc-worker.mjs','manifest.webmanifest','icon-192.png','icon-512.png','icon-maskable.png','apple-touch-icon.png','vendor/fflate.mjs','vendor/pdf.mjs','vendor/pdf.worker.mjs'];
-self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE.map(p=>new Request(new URL(p+(/\.mjs$|\.css$/.test(p)?'?v=ee68833afd5a':''),self.registration.scope),{cache:'reload'})))).then(()=>self.skipWaiting())));
+const CACHE='life-archive-universal-6366242b0483';
+const CORE=['./','index.html','style.css','app.mjs','reminders.js','model.mjs','db.mjs','documents.mjs','doc-worker.mjs','manifest.webmanifest','icon-192.png','icon-512.png','icon-maskable.png','apple-touch-icon.png','vendor/fflate.mjs','vendor/pdf.mjs','vendor/pdf.worker.mjs'];
+self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE.map(p=>new Request(new URL(p+(/\.mjs$|\.css$/.test(p)?'?v=6366242b0483':''),self.registration.scope),{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('life-archive-universal-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
   const request=event.request,url=new URL(request.url);
@@ -13,3 +13,5 @@ self.addEventListener('fetch',event=>{
     const response=await fetch(request);if(response.ok&&response.type!=='opaque')await cache.put(request,response.clone());return response;
   }));
 });
+
+self.addEventListener('notificationclick',event=>{event.notification.close();event.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(async windows=>{for(const client of windows)if(client.url.startsWith(self.registration.scope))return client.focus();return clients.openWindow(self.registration.scope);}));});

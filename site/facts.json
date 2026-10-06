@@ -1,39 +1,21 @@
 {
   "name": "人生档案",
-  "alternateName": "Life Archive",
-  "founder": "祖仁泽",
   "url": "https://zurenze1.github.io/life-archive/",
-  "authorUrl": "https://zurenze1.github.io/life-archive/author/",
-  "personalWebsite": "https://zurenze1.github.io/zurenze-personal-site/",
   "repository": "https://github.com/zurenze1/life-archive",
-  "version": "1.1.0",
-  "updated": "2026-10-06",
-  "platform": "Modern browser on iOS, iPadOS, Android, macOS, Windows, Linux",
+  "license": "MIT",
+  "free": true,
+  "version": "1.2.0",
+  "desktopVersion": "1.2.0",
   "startUrl": "https://zurenze1.github.io/life-archive/app/",
-  "desktopVersion": "1.0.0",
-  "desktopPlatform": "macOS 13+ Apple Silicon",
-  "desktopDownloadUrl": "https://github.com/zurenze1/life-archive/releases/download/v1.0.0/LifeArchive-1.0.0-arm64.dmg",
-  "dataStorage": "使用者本机，不自动上传",
-  "capabilities": [
-    "手动生活记录",
-    "DOCX/XLSX/PDF 可读文字",
-    "照片影音原件本地保存",
-    "主动录音（浏览器支持时）",
-    "搜索与回收站",
-    "含附件的完整 JSON 备份与手动迁移"
-  ],
-  "desktopCapabilities": [
-    "支持的浏览记录",
-    "前台应用采样",
-    "本机文件与媒体原件索引"
-  ],
-  "notAvailable": [
-    "所有 App 全量读取",
-    "微信加密库解密",
-    "影音识别",
-    "录音转写",
-    "多设备实时同步",
-    "手机独立安装包"
-  ],
-  "documentation": "https://zurenze1.github.io/life-archive/faq/"
+  "desktopDownloadUrl": "https://github.com/zurenze1/life-archive/releases/download/v1.2.0/LifeArchive-1.2.0-arm64.dmg",
+  "updated": "2026-10-06",
+  "reminders": {
+    "defaultEnabled": false,
+    "customTime": true,
+    "strong": true,
+    "snoozeMinutes": 10,
+    "browserRequiresRunning": true,
+    "calendarExport": true
+  },
+  "dataStorage": "使用者当前设备，不自动上传"
 }
