@@ -18,7 +18,7 @@ function fixture(){
 test('local records persist after restart and exports mark collected clues as unconfirmed',()=>{
   const f=fixture();
   try{
-    const row={key:'release-fixture',source:'chrome',kind:'browser',title:'测试页面',body:'仅用于发布测试',occurredAt:'2026-10-06T01:00:00Z',url:'https://example.org/path?token=secret#private'};
+    const row={key:'release-fixture',source:'chrome',kind:'browser',title:'测试页面',body:'仅用于发布测试',occurredAt:new Date(2026,9,6,9,0,0).toISOString(),url:'https://example.org/path?token=secret#private'};
     assert.equal(f.store.add(row),true);
     assert.equal(f.store.add(row),false);
     assert.equal(f.store.list().total,1);
