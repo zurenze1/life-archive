@@ -1,0 +1,3 @@
+const {contextBridge,ipcRenderer}=require('electron');
+const channels=['state','records','scan','tracking','source-toggle','folder-add','folder-remove','import','export','open-record','reveal-data','privacy','website','web-url','android-help','login','record-start','record-save','clear'];
+contextBridge.exposeInMainWorld('archive',Object.fromEntries([...channels.map(name=>[name.replace(/-([a-z])/g,(_,c)=>c.toUpperCase()),(...args)=>ipcRenderer.invoke(name,...args)]),['onProgress',callback=>{const listener=(_event,progress)=>callback(progress);ipcRenderer.on('scan-progress',listener);return ()=>ipcRenderer.removeListener('scan-progress',listener);}]]));
