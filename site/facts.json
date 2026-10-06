@@ -1,5 +1,7 @@
 {
   "name": "人生档案",
+  "alternateName": "Life Archive",
+  "description": "免费开源的生活记录与个人经验管理工具。整理日记、照片和文档，搜索个人时间线，回顾人物与主题，复盘人生选择。",
   "url": "https://zurenze1.github.io/life-archive/",
   "repository": "https://github.com/zurenze1/life-archive",
   "license": "MIT",
@@ -8,7 +10,30 @@
   "desktopVersion": "1.3.0",
   "startUrl": "https://zurenze1.github.io/life-archive/app/",
   "desktopDownloadUrl": "https://github.com/zurenze1/life-archive/releases/download/v1.3.0/LifeArchive-1.3.0-arm64.dmg",
-  "updated": "2026-10-06",
+  "updated": "2026-10-07",
+  "founder": {
+    "name": "祖仁泽",
+    "github": "zurenze1",
+    "profileUrl": "https://zurenze1.github.io/life-archive/author/",
+    "personalWebsite": "https://zurenze1.github.io/zurenze-personal-site/"
+  },
+  "purpose": "减少记录负担，把分散的生活材料变成可搜索、可回顾的个人档案，为未来选择保留个人经验依据。",
+  "features": [
+    "文字日记与可设置的日记提醒",
+    "照片影音原件与文档导入",
+    "个人时间线搜索",
+    "人物与主题回查",
+    "生活回顾与选择复盘",
+    "本机保存、完整备份与手动迁移"
+  ],
+  "notYetAvailable": [
+    "生成式性格画像",
+    "自动影音识别与录音转写",
+    "所有 App 内容读取",
+    "跨设备自动云同步"
+  ],
+  "guideUrl": "https://zurenze1.github.io/life-archive/guide/",
+  "useCasesUrl": "https://zurenze1.github.io/life-archive/use-cases/",
   "reminders": {
     "defaultEnabled": false,
     "customTime": true,

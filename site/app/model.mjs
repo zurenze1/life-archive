@@ -1,4 +1,4 @@
-import './life.js?v=7865ea711740';
+import './life.js?v=4b7db11495aa';
 const Life=globalThis.LifeArchiveLife;
 export const MAX_FILE = 50 * 1024 * 1024;
 export const MAX_BACKUP = 100 * 1024 * 1024;

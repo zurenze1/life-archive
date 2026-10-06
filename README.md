@@ -1,53 +1,65 @@
-# 人生档案 · 面向每个人的免费开源生活记录工具
+# 人生档案（Life Archive）
 
-在自己的电脑上，留住生活线索，找回过去，逐渐看懂自己。
+**把日记、照片、文档和生活线索，整理成一份能搜索、能回顾、能复盘的人生档案。**
 
-**免费开源 · MIT 许可。** [开始使用](https://zurenze1.github.io/life-archive/app/) · [产品介绍](https://zurenze1.github.io/life-archive/)
+免费开源的生活记录与个人经验管理工具，由 **[祖仁泽](https://zurenze1.github.io/life-archive/author/)** 发起，面向每一个想留住经历、理解自己的人。MIT 许可，无需注册，档案保存在使用者自己的设备。
 
-人生档案提供免费通用网页版和 Mac 自动采集端。通用版让手机与电脑用户都能开始记录；Mac 端将能够正常读取、并经使用者授权的电脑活动和已有材料整理到本机档案中。每个人使用自己的设备和数据。
+[立即使用网页版](https://zurenze1.github.io/life-archive/app/) · [下载 Mac 1.3](https://github.com/zurenze1/life-archive/releases/tag/v1.3.0) · [使用教程](https://zurenze1.github.io/life-archive/guide/) · [项目介绍](https://zurenze1.github.io/life-archive/)
 
-## 每个人都能用的免费通用版
+![人生档案：留住经历、理解自己、为选择积累经验](site/assets/share.png)
 
-[打开人生档案通用版](https://zurenze1.github.io/life-archive/app/)：iPhone、iPad、安卓、Mac（含 Intel）、Windows 和 Linux 可通过现代浏览器使用，无需注册。无需下载 Mac 安装包，也可以记录文字、导入照片/视频/录音原件，提取 DOCX / XLSX / PDF 可读文字，搜索时间线、录音、完整备份与迁移。
+## 是什么？
 
-档案保存在当前设备浏览器，不自动上传。浏览器需要支持 JavaScript 与 IndexedDB；录音、拍照、媒体播放、安装和存储能力会因浏览器而异。首次联网完成离线准备后，可使用核心功能。支持的浏览器可以添加到桌面；iPhone / iPad 在 Safari 的分享菜单选择“添加到主屏幕”。
+人生档案是一款**生活记录、个人时间线与选择复盘工具**。你可以写一页日记、保存一张照片、导入一份文档或录一段声音；把这些材料放在时间线上，再用人物、主题和感受连接起来。Mac 版还可整理已经支持、经你授权能够读取的电脑活动线索。
 
-请定期导出包含文字和原件的完整备份。换设备可以传输备份后导入，当前没有自动云同步；不同浏览器及桌面模式可能各自存储。清除网站数据或系统回收存储可能丢失档案。共用浏览器没有独立的登录锁，使用者应自行管理设备访问。
+积累一段时间后，你可以找回某次经历、回看一段关系、观察近期生活主题，也能对照过去做选择时的理由和后来结果。**让过去的经历成为下一次选择的参考**，是这个工具的长期价值。
 
-通用网页不自动读取其他 App 的聊天或订单。Mac 自动采集端另行提供；其他平台原生采集、应用商店安装包和实时同步尚未上线。详见[通用版说明](https://zurenze1.github.io/life-archive/releases/universal/)。
+## 为什么被设计出来？
 
-## 下载安装
+我们每天都会留下照片、文件、浏览记录与片段感受，但它们散落在不同地方。日记容易忘写，记忆会淡化；重大选择到来时，常常只记得最近的情绪，却找不到自己过去的经验。
 
-1. 打开 [安装包下载页](https://github.com/zurenze1/life-archive/releases/tag/v1.3.0)，下载 `LifeArchive-1.3.0-arm64.dmg`。
-2. 打开 DMG，将「人生档案」拖入「应用程序」。
-3. 打开应用，在「采集来源」查看实际读取状态，在「设置与数据」调整采集目录。
+祖仁泽发起人生档案，源于一个愿望：**少一点记录负担，多一点理解自己的依据。** 不必一次写完人生，也不必每天写长篇。先留下一件真实的事，再把分散的材料慢慢连成自己的故事。
 
-**首版安装包需要 macOS 13+，适用于 Apple 芯片 Mac（M1 / M2 / M3 / M4 等 arm64 设备）。** Intel Mac、Windows、安卓和 iPhone 独立安装包尚未发布。
+## 有什么用？能解决哪些痛点？
 
-1.3 是公开测试版本，尚未经过 Apple Developer ID 签名和公证。下载后可能被系统拦截；请按 [Apple 官方说明](https://support.apple.com/en-us/102445) 判断是否信任并打开。
+| 你遇到的问题 | 人生档案怎样帮助 | 留下的价值 |
+| --- | --- | --- |
+| 总忘写日记，记录难坚持 | 导入已有材料，写几句话或主动录音；提醒可自选时间、开关与强度 | 更轻松地长期留下经历 |
+| 信息散在各处，过去很难找 | 建立时间线，按日期、关键词、人物和主题回查 | 找回重要记忆和当时背景 |
+| 对自己只有模糊印象 | 用已确认记录查看 12 周生活纹理、本周回顾、主题与感受 | 具体观察自己的变化 |
+| 做重大决定，过去经验难调用 | 保存处境、选项、理由、期待与实际结果，并关联原始经历 | 为下一次选择提供个人经验依据 |
 
-## 1.3：从留下材料，到读懂自己
+例如，考虑换工作时，可以回查过去让自己满意或疲惫的经历，再对照上一次换工作的理由与实际结果。这个过程帮助你理解自己的取舍；工具保留依据，最终判断由你完成。
 
-- 恢复已确认的光门电影首页；通用版与 Mac 工作区统一黑色、暖灰、宋体与克制留白。
-- 经历可补充主题、同行的人、标签、感受、地点与置顶；搜索人物和标签，按人物、主题回到原始经历。
-- “旁观自己”提供最近 12 周的生活纹理、本周回望、主题分布与 Markdown 回顾导出。只统计未删除且已确认的经历，不从自动采样推断性格。
-- “人生选择”保存处境、选项、实际选择、理由、期待、担心、回望日期与实际结果；关联已确认经历，支持修改、复盘与回收站。
-- 通用版完整备份 v2 包含选择记录与附件，兼容旧版 v1 和 Mac 文字导出；旧云端媒体引用仍需另行保留原件。
-- 在通用版的备份导入中可选择 ActivityWatch 的 buckets JSON，整理前台应用事件并减去同设备离开时段，保持待确认。不会自动安装、连接或读取 ActivityWatch。
-- 示例通过“只看虚构示例”单独展示，不写入使用者档案。
+## 怎么使用？从三分钟开始
 
-开源研究与功能对应见 [借鉴记录](docs/OPEN_SOURCE_REFERENCES.md)。
+### 方式一：手机或电脑，直接打开网页版
 
-## 可以做什么
+1. [打开人生档案](https://zurenze1.github.io/life-archive/app/)，无需注册。iPhone、iPad、安卓、Mac、Windows 和 Linux 可通过支持 JavaScript 与 IndexedDB 的现代浏览器使用。
+2. 点击 **“记下这一刻”** 写一件今天发生的事；也可选择 **“导入已有材料”**、**“说一段话”** 或 **“拍照留一刻”**。
+3. 在经历中补充人物、主题、地点与感受，确认真实发生的经历。以后按人物、主题、关键词与日期找回它。
+4. 怕忘记，在顶部 **“日记提醒”** 自选每天时间、普通或强提醒；默认关闭。可以先点测试提醒。
+5. 积累后打开 **“旁观自己”** 回顾；遇到重要选择，进入 **“人生选择”** 保存理由，后来补充结果。
+6. 定期点击 **“备份与迁移”** 导出完整备份，换设备后导入。档案留在当前浏览器；清除网站数据前先备份。
 
-- **自动留下线索**：记录前台应用使用，整理已支持的浏览记录、文档与媒体原件索引。
-- **找回过去**：按关键词、类型和日期搜索时间线，打开原始来源。
-- **少打字**：导入已有材料，或主动录一段声音。
-- **自己掌握档案**：暂停来源、调整文件夹、导出 JSON，数据保存在本机。
+首次联网完成离线准备后，可使用核心功能。支持的浏览器可以添加到桌面；iPhone / iPad 可在 Safari 分享菜单选择“添加到主屏幕”。录音、拍照、媒体播放与安装依浏览器支持，当前没有自动云同步。
 
-应用运行期间每 15 秒采样一次前台应用，每 30 分钟重新整理。关闭窗口后留在菜单栏；选择菜单栏「退出并停止采集」结束运行。锁屏、空闲超过 2 分钟或睡眠时停止前台应用采样。
+### 方式二：Apple 芯片 Mac，安装自动采集端
 
-首次运行检查桌面、文稿、下载、图片、影片和音乐文件夹，以及已适配的应用来源。遇到系统权限提示，由使用者决定是否授权。录音在主动点击后单独申请麦克风权限。
+1. 在 [Mac 下载页](https://github.com/zurenze1/life-archive/releases/tag/v1.3.0) 下载 `LifeArchive-1.3.0-arm64.dmg`，打开后将“人生档案”拖入“应用程序”。需要 **macOS 13+ 与 Apple 芯片 Mac**。
+2. 打开应用，先在 **“采集来源”** 查看实际读取状态，再到 **“设置与数据”** 选择允许整理的文件夹与来源。
+3. 补充日记、人物和主题；在设置中选择日记提醒，回看时间线与人生选择。
+4. 程序运行时每 15 秒采样前台应用、每 30 分钟重新整理支持来源。关闭窗口后留在菜单栏；选择“退出并停止采集”结束运行。锁屏、空闲超过 2 分钟或睡眠时停止前台采样。
+
+1.3 为公开测试版，采用 ad hoc 签名，尚无 Apple Developer ID 公证。首次打开可能被系统拦截，参见 [Apple 官方说明](https://support.apple.com/en-us/102445)。Intel Mac、Windows、安卓与 iPhone 的独立安装包尚未发布，可先使用通用网页版。
+
+## 已经能做什么，哪些还在规划？
+
+- **已经提供：** 文字日记、媒体原件导入与主动录音、DOCX / XLSX / PDF 可读文字提取、搜索时间线、人物与主题回查、生活回顾、选择复盘、可设置的日记提醒、备份与手动迁移；Mac 另有部分电脑线索采集。
+- **尚未提供：** 生成式性格画像、自动影音识别与录音转写、所有 App 内容读取、跨设备自动同步。通用版可手动导入 ActivityWatch buckets JSON，保持待确认。
+- **观察以记录为依据：** 自动线索需你确认；浏览过、安排过或出现订单，并不证明事情真实完成。“旁观自己”帮助回顾记录，不自动给人贴性格标签。
+
+详细使用方法见 [快速开始](https://zurenze1.github.io/life-archive/guide/)，适用场景见 [生活记录与选择复盘](https://zurenze1.github.io/life-archive/use-cases/)，功能边界见 [CAPABILITIES](docs/CAPABILITIES.md)。
 
 ## 数据与使用边界
 
@@ -99,3 +111,15 @@ Mac 关闭窗口留在菜单栏仍可提醒；退出、关机或睡眠无法提�
 ## 开源许可
 
 项目采用 [MIT License](LICENSE)，可以免费使用、修改和分发；保留版权和许可声明。第三方依赖仍遵循自身许可。本项目无需注册，不预设个人账号，也不包含任何人的个人档案。
+
+## 项目发起人与贡献
+
+人生档案由 **祖仁泽（GitHub：zurenze1）** 发起，目标是帮助每个人留住经历、理解自己，并让个人经验在未来选择时可被回查。项目面向所有使用者，免费开源；发起人信息仅用于公开项目说明，使用者的档案独立保存在自己的设备。
+
+[项目缘起与发起人](https://zurenze1.github.io/life-archive/author/) · [祖仁泽个人网站](https://zurenze1.github.io/zurenze-personal-site/) · [提交问题与建议](https://github.com/zurenze1/life-archive/issues)
+
+## About Life Archive
+
+Life Archive is a free, MIT-licensed, local-first life recording and personal experience tool initiated by **祖仁泽 (zurenze1)**. Keep diary entries, photos, documents and audio in a personal timeline; search by people and themes, review your life, and record the reasons and outcomes of important decisions. Optional diary reminders help you keep recording.
+
+Use the [browser app](https://zurenze1.github.io/life-archive/app/) on phones and computers, or install the Apple-silicon Mac collector. Data stays on your device; backups and migration are manual. AI personality profiling, media transcription and automatic cloud sync are not yet available. See the [guide](https://zurenze1.github.io/life-archive/guide/) and [capabilities](docs/CAPABILITIES.md) for the current scope.

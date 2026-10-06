@@ -1,5 +1,5 @@
-import {MAX_FILE,MAX_BACKUP,localParts,normalizeEntry,backupPayload,filterEntries,sniffType,recordingMime} from './model.mjs?v=7865ea711740';
-import {allEntries,getAttachment,saveBatch,openDb,getSetting,setSetting,claimReminder} from './db.mjs?v=7865ea711740';
+import {MAX_FILE,MAX_BACKUP,localParts,normalizeEntry,backupPayload,filterEntries,sniffType,recordingMime} from './model.mjs?v=4b7db11495aa';
+import {allEntries,getAttachment,saveBatch,openDb,getSetting,setSetting,claimReminder} from './db.mjs?v=4b7db11495aa';
 const $=id=>document.getElementById(id);
 $('entry-metadata').innerHTML=LifeArchiveStudio.fields('entry');
 const studio=LifeArchiveStudio.start({load:async()=>({entries:await allEntries(),decisions:await getSetting('decisions',[])}),saveDecision:async d=>{const list=await getSetting('decisions',[]);const index=list.findIndex(x=>x.id===d.id);if(index<0)list.push(d);else list[index]=d;await setSetting('decisions',list);},edit:id=>openEditor(id),toast});
@@ -48,11 +48,11 @@ async function openEditor(id=null){
 }
 async function hashFile(file){const bytes=await file.arrayBuffer();const digest=await crypto.subtle.digest('SHA-256',bytes);return [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');}
 function officeText(bytes,extension){return new Promise((resolve,reject)=>{
-  const worker=new Worker(new URL('./doc-worker.mjs?v=7865ea711740',import.meta.url),{type:'module'});const timeout=setTimeout(()=>{worker.terminate();reject(new Error('文档解析超时，仅保留原件'));},12000);
+  const worker=new Worker(new URL('./doc-worker.mjs?v=4b7db11495aa',import.meta.url),{type:'module'});const timeout=setTimeout(()=>{worker.terminate();reject(new Error('文档解析超时，仅保留原件'));},12000);
   const finish=()=>{clearTimeout(timeout);worker.terminate();};worker.onmessage=({data})=>{finish();data.error?reject(new Error(data.error)):resolve(data);};worker.onerror=()=>{finish();reject(new Error('当前浏览器无法解析此文档，原件仍可保存'));};worker.postMessage({bytes,extension},[bytes]);
 });}
 async function pdfText(file){
-  const pdf=await import('./vendor/pdf.mjs?v=7865ea711740');pdf.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.mjs?v=7865ea711740',import.meta.url).href;
+  const pdf=await import('./vendor/pdf.mjs?v=4b7db11495aa');pdf.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.mjs?v=4b7db11495aa',import.meta.url).href;
   const loading=pdf.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false,standardFontDataUrl:new URL('./vendor/standard_fonts/',import.meta.url).href,cMapUrl:new URL('./vendor/cmaps/',import.meta.url).href,cMapPacked:true,disableFontFace:true});
   let timeout;const parse=async()=>{const doc=await loading.promise;const out=[];for(let i=1;i<=Math.min(doc.numPages,30);i++){const page=await doc.getPage(i);const text=await page.getTextContent();out.push(text.items.map(item=>item.str??'').join(' '));page.cleanup();}const text=out.join('\n').slice(0,30000);return {text,detail:text.trim()?'已提取 PDF 可读文字，最多 30 页；保留原件':'PDF 无可读文字层，仅保存原件，尚无扫描件 OCR'};};
   try{return await Promise.race([parse(),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('PDF 解析超时，仅保留原件')),20000);})]);}finally{clearTimeout(timeout);await loading.destroy();}

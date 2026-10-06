@@ -1,10 +1,28 @@
 # 人生档案（Life Archive）
 
-免费开源、面向每个人的生活记录工具。MIT 许可，无需注册，档案保存在使用者当前设备。
+> 免费开源的生活记录与个人经验管理工具，由祖仁泽（GitHub：zurenze1）发起，面向每个人。MIT 许可，无需注册，个人档案保存在使用者设备。
 
-- [通用版](https://zurenze1.github.io/life-archive/app/)
-- [Mac 版](https://github.com/zurenze1/life-archive/releases/tag/v1.3.0)
-- [源码与 MIT 许可](https://github.com/zurenze1/life-archive)
-- [日记提醒与功能说明](https://zurenze1.github.io/life-archive/faq/)
+## 是什么、为什么
 
-提醒默认关闭，可选时间、强度、延后和今天已写。网页关闭无法可靠定时，可选择系统日历。Mac 保持菜单栏运行可提醒；退出或睡眠不提醒。没有所有 App 全量读取、影音识别、转写或自动云同步。
+把日记、照片、文档与生活线索放在同一时间线上，按人物、主题与日期回查，回顾生活并复盘选择。解决记录难坚持、材料分散、对自己印象模糊与过去经验难调用的问题。
+
+## 公开资料
+
+- [产品介绍](https://zurenze1.github.io/life-archive/)
+- [使用教程：怎么开始、设置提醒和备份](https://zurenze1.github.io/life-archive/guide/)
+- [使用场景与价值](https://zurenze1.github.io/life-archive/use-cases/)
+- [项目缘起与发起人祖仁泽](https://zurenze1.github.io/life-archive/author/)
+- [常见问题与功能边界](https://zurenze1.github.io/life-archive/faq/)
+- [机器可读事实](https://zurenze1.github.io/life-archive/facts.json)
+- [GitHub 自述文件与 MIT 源码](https://github.com/zurenze1/life-archive)
+
+## 使用入口
+
+- [通用网页版](https://zurenze1.github.io/life-archive/app/)：支持现代浏览器，iPhone、安卓与电脑均可打开；需 JavaScript 与 IndexedDB。
+- [Mac 安装包](https://github.com/zurenze1/life-archive/releases/tag/v1.3.0)：macOS 13+ 与 Apple 芯片，目前为公开测试版。
+
+## 功能与边界
+
+日记、媒体原件与文档导入、人物与主题回查、生活回顾、人生选择复盘、备份与手动迁移已提供。Mac 可整理部分已支持且可授权读取的电脑线索，自动线索需使用者确认。
+
+日记提醒默认关闭，可选时间、强度、延后和今天已写。网页关闭无法可靠定时，可选择系统日历；Mac 退出或睡眠无法提醒。没有生成式性格画像、自动影音识别与转写、所有 App 内容读取或自动云同步。公开页面不包含使用者个人档案。
