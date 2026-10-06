@@ -16,7 +16,8 @@
     "package": "electron-builder --mac dmg zip --arm64",
     "diagnose": "node scripts/diagnose.cjs",
     "site:build": "node scripts/build-site.cjs",
-    "site:check": "node scripts/check-site.cjs"
+    "site:check": "node scripts/check-site.cjs",
+    "web:check": "node --check web/app.mjs && node --check web/sw.js && node --check web/db.mjs && node --check web/model.mjs && node --check web/documents.mjs"
   },
   "dependencies": {
     "koffi": "^2.15.1",

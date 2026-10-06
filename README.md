@@ -4,7 +4,17 @@
 
 **发起人：祖仁泽。** [公开工具介绍](https://zurenze1.github.io/life-archive/) · [祖仁泽作者页](https://zurenze1.github.io/life-archive/author/) · [祖仁泽个人网站](https://zurenze1.github.io/zurenze-personal-site/)
 
-这是「人生档案」的 Mac 桌面版。它将能够正常读取、并经使用者授权的电脑活动和已有材料整理到本机档案中。每个人安装后，使用的是自己的设备和数据。
+人生档案提供免费通用网页版和 Mac 自动采集端。通用版让手机与电脑用户都能开始记录；Mac 端将能够正常读取、并经使用者授权的电脑活动和已有材料整理到本机档案中。每个人使用自己的设备和数据。
+
+## 每个人都能用的免费通用版
+
+[打开人生档案通用版](https://zurenze1.github.io/life-archive/app/)：iPhone、iPad、安卓、Mac（含 Intel）、Windows 和 Linux 可通过现代浏览器使用，无需注册。无需下载 Mac 安装包，也可以记录文字、导入照片/视频/录音原件，提取 DOCX / XLSX / PDF 可读文字，搜索时间线、录音、完整备份与迁移。
+
+档案保存在当前设备浏览器，不自动上传。浏览器需要支持 JavaScript 与 IndexedDB；录音、拍照、媒体播放、安装和存储能力会因浏览器而异。首次联网完成离线准备后，可使用核心功能。支持的浏览器可以添加到桌面；iPhone / iPad 在 Safari 的分享菜单选择“添加到主屏幕”。
+
+请定期导出包含文字和原件的完整备份。换设备可以传输备份后导入，当前没有自动云同步；不同浏览器及桌面模式可能各自存储。清除网站数据或系统回收存储可能丢失档案。共用浏览器没有独立的登录锁，使用者应自行管理设备访问。
+
+通用网页不自动读取其他 App 的聊天或订单。Mac 自动采集端另行提供；其他平台原生采集、应用商店安装包和实时同步尚未上线。详见[通用版说明](https://zurenze1.github.io/life-archive/releases/universal/)。
 
 ## 下载安装
 
@@ -63,3 +73,5 @@ npm start
 `site/` 只发布产品说明、作者资料和下载入口，不包含使用者的个人档案。运行 `npm run site:build` 生成静态 HTML，`npm run site:check` 检查页面、站内链接、结构化数据和网站地图；合并到 main 后由 GitHub Pages 工作流发布。
 
 `sitemap.xml` 列出公开页面，`llms.txt` 和 `facts.json` 提供公开内容导览。它们不保证搜索引擎或 AI 收录与排名。GitHub 项目站位于子路径，爬虫的 robots.txt 规则由主机根目录决定，不能用项目目录中的同名文件替代。
+
+`web/` 是通用版源代码。`npm run site:build` 会将它复制到 `site/app/` 并为离线缓存生成版本。`node scripts/preview-site.cjs` 在 `http://127.0.0.1:5197/life-archive/app/` 提供本地预览。`web/vendor/` 包含 fflate / PDF.js 的浏览器发行文件和许可证，从锁定的 npm 依赖复制，不使用外部 CDN。手机原生系统、麦克风实机和不同浏览器仍需分别验证，不能以手机尺寸预览冒充实机测试。
