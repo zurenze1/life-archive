@@ -1,0 +1,21 @@
+# 人生档案（Life Archive）
+
+> 祖仁泽发起的个人生活记录工具。当前版本为 Mac 本地采集端 1.0.0，适用 macOS 13+ 与 Apple 芯片。
+
+## 公开资料
+
+- [工具介绍](https://zurenze1.github.io/life-archive/)：功能与下载
+- [祖仁泽作者页](https://zurenze1.github.io/life-archive/author/)：项目发起人及公开入口
+- [常见问题](https://zurenze1.github.io/life-archive/faq/)：真实范围与限制
+- [1.0 发布说明](https://zurenze1.github.io/life-archive/releases/1-0/)：安装与验证
+- [公开源码](https://github.com/zurenze1/life-archive)
+
+## 实际能力
+
+本机整理可授权读取的电脑活动、支持的浏览记录、DOCX/XLSX/PDF 文字与媒体原件索引；支持主动录音、搜索、暂停与 JSON 导出。数据不自动上传。
+
+## 限制
+
+不完整读取所有 App；不解密微信聊天库。尚无影音识别、录音转写、多设备实时同步或手机独立安装包。订单、日程与访问记录只是待确认线索，不能证明实际经历。
+
+说明更新：2026-10-06。本文是公开内容导览，不代表搜索引擎或 AI 已收录。

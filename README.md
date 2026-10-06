@@ -1,6 +1,8 @@
-# 人生档案
+# 人生档案 · 祖仁泽发起的个人生活记录工具
 
 在自己的电脑上，留住生活线索，找回过去，逐渐看懂自己。
+
+**发起人：祖仁泽。** [公开工具介绍](https://zurenze1.github.io/life-archive/) · [祖仁泽作者页](https://zurenze1.github.io/life-archive/author/) · [祖仁泽个人网站](https://zurenze1.github.io/zurenze-personal-site/)
 
 这是「人生档案」的 Mac 桌面版。它将能够正常读取、并经使用者授权的电脑活动和已有材料整理到本机档案中。每个人安装后，使用的是自己的设备和数据。
 
@@ -55,3 +57,9 @@ npm start
 ## 项目状态
 
 这是本机采集端 1.0。自动采集的线索用于回顾与整理，人物性格结论、影音识别和所有 App 内容的全量读取仍需进一步接入。
+
+## 公开介绍网站
+
+`site/` 只发布产品说明、作者资料和下载入口，不包含使用者的个人档案。运行 `npm run site:build` 生成静态 HTML，`npm run site:check` 检查页面、站内链接、结构化数据和网站地图；合并到 main 后由 GitHub Pages 工作流发布。
+
+`sitemap.xml` 列出公开页面，`llms.txt` 和 `facts.json` 提供公开内容导览。它们不保证搜索引擎或 AI 收录与排名。GitHub 项目站位于子路径，爬虫的 robots.txt 规则由主机根目录决定，不能用项目目录中的同名文件替代。

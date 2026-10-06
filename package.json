@@ -4,14 +4,19 @@
   "version": "1.0.0",
   "description": "在自己的电脑上自动整理可授权读取的生活线索",
   "main": "main.cjs",
-  "author": "Life Archive",
+  "author": {
+    "name": "祖仁泽",
+    "url": "https://zurenze1.github.io/life-archive/author/"
+  },
   "license": "UNLICENSED",
   "private": true,
   "scripts": {
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
     "package": "electron-builder --mac dmg zip --arm64",
-    "diagnose": "node scripts/diagnose.cjs"
+    "diagnose": "node scripts/diagnose.cjs",
+    "site:build": "node scripts/build-site.cjs",
+    "site:check": "node scripts/check-site.cjs"
   },
   "dependencies": {
     "koffi": "^2.15.1",
@@ -71,7 +76,7 @@
     },
     "artifactName": "LifeArchive-${version}-${arch}.${ext}"
   },
-  "homepage": "https://github.com/zurenze1/life-archive",
+  "homepage": "https://zurenze1.github.io/life-archive/",
   "repository": {
     "type": "git",
     "url": "https://github.com/zurenze1/life-archive.git"
