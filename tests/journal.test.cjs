@@ -1,0 +1,24 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {Store}=require('../core/store.cjs');const {Journal,summarize,due,prefs}=require('../core/journal.cjs');
+function fixture(){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'life-journal-'));const s=new Store(dir),j=new Journal(s);j.initialize();return {dir,s,j,close(){this.s.close();fs.rmSync(dir,{recursive:true,force:true});}};}
+test('raw speech is unchanged and every summary point is an exact anchored original substring',()=>{
+ const parts=[{id:'a',promptId:'events',text:'嗯。今天本来想读书，但是没读。我没有答应这个合作。我没有答应这个合作。'},{id:'b',promptId:'learning',text:'还没有想明白原因，不能说我已经明白了。'},{id:'c',promptId:'next',text:'明天可能看书，不确定。'}];
+ const original=JSON.stringify(parts),summary=summarize(parts);assert.equal(JSON.stringify(parts),original);assert.equal(summary.stats.duplicatesRemoved,1);assert.equal(summary.stats.fillerOnlyRemoved,1);
+ for(const section of summary.sections)for(const item of section.items){const s=parts.find(s=>s.id===item.segmentId);assert.equal(s.text.slice(item.start,item.end),item.text);}
+ const all=summary.sections.flatMap(s=>s.items).map(s=>s.text).join('');assert(all.includes('没读'));assert(all.includes('没有答应'));assert(all.includes('不确定'));assert(!all.includes('因为'));assert.equal(summary.sections[1].items[0].text,parts[1].text);
+});
+test('empty entries cannot dismiss a reminder, timestamps are automatic, drafts and originals survive restart',()=>{
+ const f=fixture();try{assert.throws(()=>f.j.save({segments:[]}));assert.throws(()=>f.j.save({segments:[{text:' \n',id:'empty'}]}));const raw='  今天还没想好。\n嗯，保留我的原话。  ';f.j.draft({segments:[{id:'a',text:raw,promptId:'free'}]});const at=new Date(2026,9,19,21,3,4);const entry=f.j.save({segments:f.j.draft().segments,day:'2000-01-01',createdAt:'fake'},at);assert.equal(entry.original,raw);assert.equal(entry.day,'2026-10-19');assert.equal(entry.createdAt,at.toISOString());assert.equal(f.j.draft().segments.length,0);f.s.close();f.s=new Store(f.dir);f.j=new Journal(f.s);assert.equal(f.j.get(entry.id).original,raw);assert.equal(f.j.hasToday(at),true);}finally{f.close();}
+});
+test('daily enforcement starts at 21:00, wakes up late, resets after midnight and honors explicit disable and emergency delay',()=>{
+ const at=(d,h,m)=>new Date(2026,9,d,h,m);assert.equal(prefs().time,'21:00');assert.equal(prefs().enabled,true);assert.equal(prefs().required,true);assert(!due({}, {},false,at(19,20,59)));assert(due({}, {},false,at(19,21,0)));assert(due({}, {},false,at(19,23,0)));assert(!due({}, {},true,at(19,22,0)));assert(!due({}, {snoozeUntil:at(19,21,5).getTime()},false,at(19,21,4)));assert(due({}, {snoozeUntil:at(19,21,5).getTime()},false,at(19,21,5)));assert(!due({}, {},false,at(20,0,0)));assert(!due({enabled:false},{},false,at(20,22,0)));assert.throws(()=>prefs({time:'25:00'}));
+});
+test('knowledge is a chosen quote with a valid source, not generated or guessed content',()=>{
+ const f=fixture();try{const e=f.j.save({segments:[{id:'a',text:'今天读到一段话。我还不知道怎么实践。',promptId:'learning'}]});const c=f.j.addCard({entryId:e.id,segmentId:'a',text:'我还不知道怎么实践。'});assert.equal(c.entryId,e.id);assert.equal(f.j.cards().length,1);assert.equal(f.j.addCard({entryId:e.id,segmentId:'a',text:c.text}).id,c.id);assert.throws(()=>f.j.addCard({entryId:e.id,segmentId:'a',text:'我已经学会了实践。'}));assert.throws(()=>f.j.addCard({entryId:e.id,segmentId:'missing',text:c.text}));assert(f.j.markdown(e).includes(e.original));}finally{f.close();}
+});
+test('raw ASR is retained separately from a corrected diary and export retains recordings and quotes',()=>{
+ const f=fixture();try{const a=f.j.addAudio({path:path.join(f.dir,'recordings/test.wav'),size:200});f.j.updateAudio(a.id,{transcript:'我今天读了论雨。',status:'ready'});const e=f.j.save({segments:[{id:'a',text:'我今天读了论语。',source:'voice',audioId:a.id,promptId:'learning'}]});assert.equal(f.j.audio(a.id).transcript,'我今天读了论雨。');assert.equal(e.original,'我今天读了论语。');f.j.addCard({entryId:e.id,segmentId:'a',text:e.original});const out=f.j.export();assert.equal(out.audio[0].transcript,'我今天读了论雨。');assert.equal(out.journals[0].segments[0].audioId,a.id);assert.equal(out.cards[0].entryId,e.id);}finally{f.close();}
+});
+test('speech failure leaves saved audio available and shell arguments are never interpreted',async()=>{
+ const {transcribe}=require('../core/speech.cjs'),f=fixture();try{const input=path.join(f.dir,'recordings');fs.mkdirSync(input);const file=path.join(input,'a;$(nothing).wav');fs.writeFileSync(file,Buffer.alloc(200));const runner=path.join(f.dir,'asr');fs.writeFileSync(runner,'#!/bin/sh\nexit 1\n',{mode:0o700});await assert.rejects(transcribe(file,runner));assert.equal(fs.statSync(file).size,200);const good=path.join(f.dir,'asr-good');fs.writeFileSync(good,'#!/bin/sh\nprintf "今天没有同意。" > "$3"\n',{mode:0o700});assert.equal(await transcribe(file,good),'今天没有同意。');}finally{f.close();}
+});

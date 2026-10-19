@@ -1,88 +1,141 @@
-const life=require('./web/life.js');
-const {app,BrowserWindow,ipcMain,dialog,shell,Tray,Menu,nativeImage,powerMonitor,systemPreferences,Notification}=require('electron');
-const fs=require('node:fs');
-const fsp=require('node:fs/promises');
-const path=require('node:path');
-const os=require('node:os');
-const {Store,hash,clean,safeUrl}=require('./core/store.cjs');
-const {Collector,extensions}=require('./core/collectors.cjs');
-const {extract,rowRecords}=require('./core/documents.cjs');
-const {frontmost}=require('./core/native.cjs');
-let window,tray,store,collector,session,locked=false,quitting=false,suspended=false;
-const timers=[];
-const reminders=require('./web/reminders.js');
-let reminderPending=false,reminderTest=false,diaryEditing=false,reminderNotification,notificationProblem='';
-app.setName('人生档案');
+const {app,BrowserWindow,ipcMain,dialog,shell,Tray,Menu,nativeImage,powerMonitor,systemPreferences,Notification,clipboard}=require('electron');
+const fs=require('node:fs'),fsp=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
+const {backup}=require('node:sqlite');
+const {Store,clean}=require('./core/store.cjs');
+const {Journal,PROMPTS,summarize,prefs,due}=require('./core/journal.cjs');
+const speech=require('./core/speech.cjs');
+const {Obsidian}=require('./core/obsidian.cjs'),{PrivateVault}=require('./core/vault.cjs'),{Updates}=require('./core/updates.cjs'),{Mobile}=require('./core/mobile.cjs');
+const {execFile}=require('node:child_process');
+let window,tray,store,journal,obsidian,privateVault,updates,mobile,locked=false,suspended=false,quitting=false,pending=false,testReminder=false,reminderDay='',asrBusy=false,reminderNotification;
+const jobs=new Map(),timers=[];
 const diagnostic=process.argv.includes('--diagnose');
-const testData=process.argv.find(arg=>arg.startsWith('--test-data='))?.slice(12);
-const testHome=process.argv.find(arg=>arg.startsWith('--test-home='))?.slice(12);
-if(testData)app.setPath('userData',path.resolve(testData));
-if(!app.requestSingleInstanceLock()&&!diagnostic){app.quit();}else{
-app.on('second-instance',()=>show());
-app.whenReady().then(async()=>{
-  store=new Store(path.join(app.getPath('userData'),'data'));
-  collector=new Collector(store,{home:testHome?path.resolve(testHome):os.homedir(),onProgress:progress=>{if(window&&!window.isDestroyed())window.webContents.send('scan-progress',progress);}});
-  if(diagnostic){let pdf='not tested';const fixture=process.argv.find(arg=>arg.startsWith('--pdf-fixture='))?.slice(14);if(fixture)pdf=(await extract(path.resolve(fixture))).text.includes('Life Archive PDF test')?'passed':'failed';console.log(JSON.stringify({electron:process.versions.electron,node:process.versions.node,sqlite:process.versions.sqlite,native:frontmost()?.name,packaged:app.isPackaged,pdf}));store.close();app.quit();return;}
-  createWindow();createTray();
-  timers.push(setInterval(checkReminder,10000));setTimeout(checkReminder,1500);
-  powerMonitor.on('lock-screen',()=>{locked=true;flushSession();});powerMonitor.on('unlock-screen',()=>{locked=false;sample();checkReminder();});powerMonitor.on('suspend',()=>{suspended=true;flushSession();});powerMonitor.on('resume',()=>{suspended=false;sample();scan();checkReminder();});
-  timers.push(setInterval(sample,15000));timers.push(setInterval(()=>{if(session)flushSession(false);},60000));timers.push(setInterval(scan,30*60*1000));
-  setTimeout(()=>{sample();scan();},800);
-}).catch(error=>{dialog.showErrorBox('人生档案启动失败',clean(error.message,500));app.quit();});
+const testData=process.argv.find(a=>a.startsWith('--test-data='))?.slice(12);
+const forceReminder=process.argv.includes('--test-reminder');
+const fakeAudio=!!testData&&process.argv.includes('--use-fake-device-for-media-stream');
+const audioQueue=[];
+app.setName('人生档案');if(testData)app.setPath('userData',path.resolve(testData));
+if(!app.requestSingleInstanceLock()&&!diagnostic)app.quit();else{
+  app.on('second-instance',()=>{show();checkReminder();});
+  app.on('activate',()=>{if(app.isReady()&&store)show();});
+  app.whenReady().then(async()=>{
+    store=new Store(path.join(app.getPath('userData'),'data'));
+    if(!store.setting('journalModeVersion',0)){
+      const folder=path.join(store.directory,'backups');fs.mkdirSync(folder,{recursive:true,mode:0o700});
+      const file=path.join(folder,'before-journal-1.4.sqlite');if(!fs.existsSync(file)){await backup(store.db,file);fs.chmodSync(file,0o600);}
+    }
+    journal=new Journal(store);journal.initialize();
+    obsidian=new Obsidian(store,journal);privateVault=new PrivateVault(store.directory);updates=new Updates(store.directory,app.getVersion?.()??'1.4.0');mobile=new Mobile(store,receiveMobile);
+    store.db.exec('CREATE TABLE IF NOT EXISTS mobile_inbox(id TEXT PRIMARY KEY,payload TEXT NOT NULL)');
+    if(!store.setting('retiredActivityRemoved',false)){const removed=store.db.prepare("DELETE FROM records WHERE kind='activity'").run().changes;store.setSetting('retiredActivityRemoved',{count:removed,at:new Date().toISOString()});}
+    if(diagnostic){let pdf='not tested';const fixture=process.argv.find(a=>a.startsWith('--pdf-fixture='))?.slice(14);if(fixture){const {extract}=require('./core/documents.cjs');pdf=(await extract(path.resolve(fixture))).text.includes('Life Archive PDF test')?'passed':'failed';}const voiceFixture=process.argv.find(a=>a.startsWith('--speech-fixture='))?.slice(17);const transcript=voiceFixture?await speech.transcribe(path.resolve(voiceFixture),speech.findRunner(store.setting('speechRunner',''))):undefined;console.log(JSON.stringify({packaged:app.isPackaged,version:app.getVersion(),sqlite:process.versions.sqlite,pdf,speechReady:!!speech.findRunner(store.setting('speechRunner','')),journalMode:true,automaticCollection:false,transcript}));store.close();app.quit();return;}
+    createWindow();createTray();
+    obsidian.sync();await mobile.start();for(const n of mobileInbox().filter(n=>!n.entryId)){const a=journal.audio(n.audioId);if(a?.transcript)finishMobile(n,a.transcript);else if(a){const runner=speech.findRunner(store.setting('speechRunner',''));if(runner){jobs.set(a.id,{status:'queued'});audioQueue.push({id:a.id,runner});}}}drainAudio();
+    timers.push(setInterval(()=>{obsidian.sync();const wasOpen=!!privateVault.key;if(wasOpen&&!privateVault.status().unlocked)window?.webContents.send('vault-locked');},60000));
+    if(!testData){setTimeout(()=>{if(store.setting('automaticUpdates',true))updates.check(true);},10000);timers.push(setInterval(()=>{if(store.setting('automaticUpdates',true))updates.check(true);},6*3600000));}
+    timers.push(setInterval(checkReminder,1000));timers.push(setInterval(()=>{if(pending&&getPrefs().required&&!locked&&!suspended&&!window?.isFocused())focusReminder();},60000));
+    setTimeout(()=>{if(forceReminder)fireReminder(true);else checkReminder();},1800);
+    powerMonitor.on('lock-screen',()=>{locked=true;privateVault.lock();window?.webContents.send('vault-locked');});powerMonitor.on('unlock-screen',()=>{locked=false;checkReminder();});powerMonitor.on('suspend',()=>{suspended=true;privateVault.lock();window?.webContents.send('vault-locked');});powerMonitor.on('resume',()=>{suspended=false;checkReminder();});
+    if(!testData)await configureSchedule();
+  }).catch(e=>{dialog.showErrorBox('人生档案启动失败',clean(e.message,300));app.quit();});
 }
-function createWindow(){window=new BrowserWindow({width:1250,height:860,minWidth:900,minHeight:640,title:testData?'人生档案 · 隔离测试':'人生档案',backgroundColor:'#11100e',autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});window.webContents.session.setPermissionRequestHandler((_wc,permission,callback,details)=>callback(permission==='media'&&details.mediaTypes?.every(type=>type==='audio')===true));window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(event,url)=>{if(url!==window.webContents.getURL())event.preventDefault();});window.loadFile(path.join(__dirname,'ui/index.html'));window.on('close',event=>{if(!quitting){event.preventDefault();window.hide();}});}
-function show(){if(!window||window.isDestroyed())createWindow();window.show();window.focus();}
-function createTray(){const icon=nativeImage.createFromPath(path.join(__dirname,'ui/tray.png')).resize({width:18,height:18});icon.setTemplateImage(true);tray=new Tray(icon);tray.setToolTip('人生档案 · 本机采集');tray.setContextMenu(Menu.buildFromTemplate([{label:'打开人生档案',click:show},{label:'立即整理',click:()=>{show();scan();}},{type:'separator'},{label:'退出并停止采集',click:()=>app.quit()}]));tray.on('click',show);}
-async function scan(){if(!store.setting('tracking',true)||collector.running||suspended)return;try{await collector.scan();}catch(error){store.source('system',{name:'采集任务',status:'error',detail:'本次整理未完成：'+clean(error.message,180)});}}
-function flushSession(end=true){if(!session)return;const duration=session.samples*15;store.add({key:'activity:'+session.started+':'+session.bundleId,source:'activity',kind:'activity',title:'使用 '+session.name,body:`前台采样约 ${Math.max(1,Math.round(duration/60))} 分钟。每 15 秒观察一次应用；时间是采样估计，不代表完整操作或聊天内容。`,occurredAt:session.started,meta:{bundleId:session.bundleId,seconds:duration,lastSeen:session.lastSeen,evidence:'前台应用采样'}});if(end)session=null;}
-function sample(){if(!store?.setting('tracking',true)||store.setting('disabledSources',[]).includes('activity')||locked||suspended||powerMonitor.getSystemIdleTime()>120){flushSession();return;}try{const current=frontmost();if(!current||current.bundleId==='com.lifearchive.desktop'||current.name==='人生档案'){flushSession();return;}const now=new Date().toISOString();if(!session||session.bundleId!==current.bundleId){flushSession();session={...current,started:now,lastSeen:now,samples:1};}else{session.samples++;session.lastSeen=now;}}catch(error){store.source('activity',{name:'应用使用时间',status:'error',detail:'前台应用读取失败：'+clean(error.message,160)});}}
-function handle(name,fn){ipcMain.handle(name,async(event,...args)=>{if(event.sender!==window?.webContents)throw new Error('来源无效');try{return await fn(...args);}catch(error){return {error:clean(error.message,300)};}});}
-handle('state',()=>({summary:store.summary(),tracking:store.setting('tracking',true),scanning:collector.running,folders:store.setting('folders',[]),disabled:store.setting('disabledSources',[]),login:app.getLoginItemSettings().openAtLogin,apps:store.setting('installedApps',[]),webUrl:store.setting('webUrl',''),reminder:reminders.settings(store.setting('diaryReminder',{})),reminderPending,reminderTest,notificationProblem,version:app.getVersion()}));
-handle('records',options=>store.list({query:String(options?.query??'').slice(0,200),source:String(options?.source??''),kind:String(options?.kind??''),day:String(options?.day??''),limit:100,offset:Number(options?.offset??0)}));
-handle('scan',()=>{scan();return {started:true};});
-handle('tracking',value=>{store.setSetting('tracking',!!value);if(!value){collector.cancelled=true;flushSession();}else{sample();scan();}return {tracking:!!value};});
-handle('source-toggle',(id,enabled)=>{if(!store.sources().some(item=>item.id===id))throw new Error('来源无效');const disabled=new Set(store.setting('disabledSources',[]));enabled?disabled.delete(id):disabled.add(id);store.setSetting('disabledSources',[...disabled]);if(id==='activity'&&!enabled)flushSession();return {ok:true};});
-handle('folder-add',async()=>{const result=await dialog.showOpenDialog(window,{title:'选择自动整理的文件夹',properties:['openDirectory','multiSelections']});if(result.canceled)return {cancelled:true};const folders=[...new Set([...store.setting('folders',[]),...result.filePaths])];store.setSetting('folders',folders);scan();return {folders};});
-handle('folder-remove',folder=>{store.setSetting('folders',store.setting('folders',[]).filter(item=>item!==folder));return {ok:true};});
-async function importFile(file){const stat=await fsp.stat(file);if(!stat.isFile()||!extensions.has(path.extname(file).toLowerCase()))return false;let result;try{result=await extract(file);}catch(error){result={text:'',detail:'原件索引；解析未完成：'+clean(error.message,100)};}const media=/\.(jpe?g|png|heic|gif|webp|mov|mp4|m4v|mp3|m4a|wav|aac|ogg)$/i.test(file);store.add({key:'file:'+file,source:'files',kind:media?'media':'file',title:path.basename(file),body:result.text||result.detail||'原件索引',occurredAt:stat.mtime,path:file,meta:{size:stat.size,evidence:'文件修改时间'}});for(const record of rowRecords(result.rows,file))store.add({...record,source:'files',path:file});return true;}
-handle('import',async()=>{const result=await dialog.showOpenDialog(window,{title:'导入照片、影音或文档',properties:['openFile','multiSelections'],filters:[{name:'支持的文件',extensions:[...extensions].map(ext=>ext.slice(1))}]});let count=0;for(const file of result.filePaths)if(await importFile(file))count++;return {count};});
-handle('export',async()=>{flushSession(false);const result=await dialog.showSaveDialog(window,{title:'导出个人档案',defaultPath:path.join(app.getPath('downloads'),'人生档案-'+new Date().toISOString().slice(0,10)+'.json'),filters:[{name:'JSON 档案',extensions:['json']}]});if(result.canceled)return {cancelled:true};await fsp.writeFile(result.filePath,JSON.stringify(store.export(),null,2),{mode:0o600});return {path:result.filePath};});
-handle('open-record',async id=>{const row=store.db.prepare('SELECT path,url FROM records WHERE id=?').get(String(id));if(!row)throw new Error('记录不存在');if(row.path){const error=await shell.openPath(row.path);if(error)throw new Error(error);}else if(row.url)await shell.openExternal(safeUrl(row.url));return {ok:true};});
-handle('reveal-data',()=>shell.showItemInFolder(store.path));
-handle('privacy',()=>shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'));
-handle('website',()=>{const url=safeUrl(store.setting('webUrl',''));if(!url)throw new Error('请先在设置中填写自己的网页版地址。');return shell.openExternal(url);});
-handle('web-url',value=>{const url=String(value).trim();if(url&&!safeUrl(url))throw new Error('请输入有效的 https 或 http 地址。');store.setSetting('webUrl',safeUrl(url));return {ok:true};});
-handle('android-help',()=>shell.openExternal('https://developer.android.com/tools/releases/platform-tools'));
-handle('login',value=>{app.setLoginItemSettings({openAtLogin:!!value,path:app.getPath('exe')});const actual=app.getLoginItemSettings().openAtLogin;return {enabled:actual,error:actual!==!!value?'系统未启用登录启动。可在系统设置 → 通用 → 登录项手动添加本工具。':undefined};});
-handle('record-start',async()=>{if(process.platform==='darwin'){const allowed=await systemPreferences.askForMediaAccess('microphone');if(!allowed)throw new Error('麦克风未授权，请在系统隐私设置中允许人生档案使用麦克风。');}return {allowed:true};});
-handle('record-save',async bytes=>{const buffer=Buffer.from(bytes);if(buffer.length>100*1024*1024||buffer.length<20)throw new Error('录音大小无效');const folder=path.join(store.directory,'recordings');await fsp.mkdir(folder,{recursive:true,mode:0o700});const now=new Date(),file=path.join(folder,now.toISOString().replace(/[:.]/g,'-')+'.webm');await fsp.writeFile(file,buffer,{mode:0o600});store.add({key:'recording:'+hash(file),source:'recordings',kind:'media',title:'录音 '+new Intl.DateTimeFormat('zh-CN',{dateStyle:'short',timeStyle:'short'}).format(now),body:'已保存原始录音，可打开播放；本版未自动转写或推断内容。',occurredAt:now,path:file});store.source('recordings',{name:'自己的录音',status:'ready',detail:'由录音按钮主动保存的声音原件'});return {ok:true};});
-
-function dismissReminder(){reminderPending=false;reminderTest=false;reminderNotification?.close();reminderNotification=null;}
-function checkReminder(){if(!store||locked||suspended||reminderPending||diaryEditing)return;const prefs=reminders.settings(store.setting('diaryReminder',{}));if(reminders.due(prefs,store.setting('diaryReminderState',{})))fireReminder(false);}
-function fireReminder(test=false){
-  if(reminderPending)return {ok:true};const prefs=reminders.settings(store.setting('diaryReminder',{}));reminderPending=true;reminderTest=test;
-  if(!test)store.setSetting('diaryReminderState',reminders.fired(store.setting('diaryReminderState',{})));
-  if(prefs.strong){show();app.dock?.bounce('informational');}window?.webContents.send('diary-reminder',{test});
-  notificationProblem='';if(Notification.isSupported()){reminderNotification?.close();reminderNotification=new Notification({title:'该写今天的日记了',body:'留下一段今天的经历。可稍后提醒，或确认今天已写。',silent:!prefs.strong,sound:prefs.strong?'default':undefined});reminderNotification.on('click',show);reminderNotification.on('failed',()=>{notificationProblem='系统通知未送达；应用内提醒仍可使用。请检查系统通知设置。';});reminderNotification.show();}else notificationProblem='本系统不支持通知；应用内提醒仍可使用。';return {ok:true};
+function createWindow(){
+  window=new BrowserWindow({width:1280,height:880,minWidth:900,minHeight:650,title:testData?'人生档案 · 隔离验证':'人生档案',backgroundColor:'#10100f',autoHideMenuBar:true,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+  window.webContents.session.setPermissionRequestHandler((_w,permission,callback,details)=>callback(permission==='media'&&details.mediaTypes?.every(type=>type==='audio')===true));
+  window.webContents.setWindowOpenHandler(()=>({action:'deny'}));window.webContents.on('will-navigate',(e,url)=>{if(url!==window.webContents.getURL())e.preventDefault();});
+  window.on('page-title-updated',e=>e.preventDefault());window.loadFile(path.join(__dirname,'ui/index.html'));window.on('close',e=>{if(!quitting){e.preventDefault();if(pending&&getPrefs().required)focusReminder();else window.hide();}});
+  window.on('closed',()=>window=null);
 }
-handle('reminder-settings',value=>{const prefs=reminders.settings(value);store.setSetting('diaryReminder',prefs);if(!prefs.enabled)dismissReminder();return {ok:true};});
-handle('reminder-test',()=>fireReminder(true));
-handle('reminder-response',action=>{if(!reminderPending)return {ok:true};if(!['done','snooze','write','disable'].includes(action))throw new Error('提醒操作无效');if(action==='disable')store.setSetting('diaryReminder',{...reminders.settings(store.setting('diaryReminder',{})),enabled:false});if(!reminderTest){if(action!=='disable'&&action!=='write')store.setSetting('diaryReminderState',reminders.respond(store.setting('diaryReminderState',{}),action));}if(action==='write')diaryEditing=true;dismissReminder();return {ok:true};});
-handle('diary-editing',value=>{diaryEditing=!!value;return {ok:true};});
-handle('diary-save',value=>{
-  const body=String(value?.body??'').trim();if(!body||body.length>20000)throw new Error('请填写日记内容（最多 20,000 字）');
-  const day=String(value?.day??reminders.localDay());if(!/^\d{4}-\d{2}-\d{2}$/.test(day))throw new Error('日记日期无效');const date=new Date(day+'T12:00:00');if(!Number.isFinite(date.getTime())||reminders.localDay(date)!==day)throw new Error('日记日期无效');
-  const now=new Date();if(day===reminders.localDay(now))date.setHours(now.getHours(),now.getMinutes(),now.getSeconds());
-  const key='diary:'+require('node:crypto').randomUUID();store.add({key,source:'diary',kind:'diary',title:String(value?.title??'').trim()||day+' 的日记',body,occurredAt:date,meta:{...life.metadata(value?.meta),confirmed:true,evidence:'使用者主动记录'}});store.source('diary',{name:'我的日记',status:'ready',detail:'主动写下并确认的经历'});
-  if(day===reminders.localDay(now))store.setSetting('diaryReminderState',reminders.respond(store.setting('diaryReminderState',{}),'done',now));diaryEditing=false;dismissReminder();return {ok:true};
+function show(){if(!window||window.isDestroyed())createWindow();if(window.isMinimized())window.restore();window.show();window.focus();}
+function createTray(){const icon=nativeImage.createFromPath(path.join(__dirname,'ui/tray.png')).resize({width:18,height:18});icon.setTemplateImage(true);tray=new Tray(icon);tray.setToolTip('人生档案 · 每天留下一点自己的知识');tray.setContextMenu(Menu.buildFromTemplate([{label:'打开人生档案',click:show},{label:'记录今天',click:()=>{show();window?.webContents.send('journal-open');}},{type:'separator'},{label:'退出人生档案',click:()=>app.quit()}]));tray.on('click',show);}
+function getPrefs(){return prefs(store.setting('journalReminder',{}));}
+function hasCompletedReminder(now=new Date()){
+  const p=getPrefs(),[h,m]=p.time.split(':').map(Number),start=new Date(now.getFullYear(),now.getMonth(),now.getDate(),h,m).toISOString();
+  return journal.list('',require('./web/reminders.js').localDay(now)).some(e=>e.createdAt>=start||e.segments.some(s=>s.appendedAt>=start));
+}
+function checkReminder(){if(!store||!journal||locked||suspended)return;if(pending){if(!testReminder&&hasCompletedReminder()){dismissReminder();return;}if(!testReminder&&reminderDay!==require('./web/reminders.js').localDay())dismissReminder();else return;}if(due(getPrefs(),store.setting('journalReminderState',{}),hasCompletedReminder()))fireReminder(false);}
+function focusReminder(){show();if(getPrefs().required){window.setAlwaysOnTop?.(true,'floating');window.setFullScreen?.(true);}app.dock?.bounce('informational');}
+function fireReminder(test=false){if(pending)return {ok:true};pending=true;testReminder=test;reminderDay=require('./web/reminders.js').localDay();focusReminder();window?.webContents.send('diary-reminder',{test,required:getPrefs().required});if(Notification.isSupported?.()){reminderNotification=new Notification({title:getPrefs().time+'，把今天留给自己',body:'说几句话，也是一份日记。原话保留，另外整理。',silent:false});reminderNotification.on('click',focusReminder);reminderNotification.show();}return {ok:true};}
+function dismissReminder(){pending=false;testReminder=false;reminderNotification?.close();window?.setAlwaysOnTop?.(false);window?.setFullScreen?.(false);}
+async function configureSchedule(){
+  if(testData||process.platform!=='darwin')return {installed:false};
+  const dir=path.join(os.homedir(),'Library/LaunchAgents'),file=path.join(dir,'com.lifearchive.diary.plist'),p=getPrefs();
+  const exec=(args)=>new Promise(resolve=>execFile('/bin/launchctl',args,{timeout:10000},error=>resolve(!error)));
+  await exec(['bootout','gui/'+process.getuid(),file]);
+  if(!p.enabled){if(fs.existsSync(file))fs.unlinkSync(file);store.setSetting('scheduleStatus',{installed:false});return {installed:false};}
+  const [hour,minute]=p.time.split(':').map(Number),application=app.isPackaged?path.resolve(process.execPath,'../../..'):'/Applications/人生档案.app';
+  const xml=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+  fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(file,`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>Label</key><string>com.lifearchive.diary</string><key>ProgramArguments</key><array><string>/usr/bin/open</string><string>-a</string><string>${xml(application)}</string><string>--args</string><string>--daily-journal</string></array><key>StartCalendarInterval</key><dict><key>Hour</key><integer>${hour}</integer><key>Minute</key><integer>${minute}</integer></dict></dict></plist>`,{mode:0o600});
+  const installed=await exec(['bootstrap','gui/'+process.getuid(),file]);const result={installed,time:p.time};store.setSetting('scheduleStatus',result);return result;
+}
+function handle(name,fn){ipcMain.handle(name,async(event,...args)=>{if(event.sender!==window?.webContents)throw Error('来源无效');try{return await fn(...args);}catch(e){return {error:clean(e.message,350)};}});}
+handle('state',()=>({version:app.getVersion(),prompts:PROMPTS,reminder:getPrefs(),pending,testReminder,speechReady:!!speech.findRunner(store.setting('speechRunner','')),schedule:store.setting('scheduleStatus',{}),hasToday:journal.hasToday(),counts:{journals:journal.list().length,cards:journal.cards().length,legacy:store.db.prepare('SELECT count(*) n FROM records').get().n},tracking:false,automaticCollection:false}));
+handle('journal-list',value=>journal.list(value?.query??'',value?.day??''));
+handle('journal-get',id=>{const e=journal.get(id);if(!e)throw Error('日记不存在');return {...e,audio:e.segments.filter(s=>s.audioId).map(s=>{const a=journal.audio(s.audioId);return a?{id:a.id,transcript:a.transcript,createdAt:a.createdAt}:null;}).filter(Boolean)};});
+handle('journal-draft',value=>journal.draft(value));
+handle('journal-summary',value=>summarize(value?.segments??[]));
+handle('journal-save',value=>{let e;if(value.appendTo){e=journal.append(value.appendTo,value);journal.draft({segments:[]});}else e=journal.save(value);if(value.private)e=journal.setPrivate(e.id,true);if(testReminder||hasCompletedReminder())dismissReminder();const sync=obsidian.sync();return {ok:true,entry:e,sync};});
+handle('journal-highlight',value=>{const e=journal.highlight(value.entryId,value);obsidian.sync();return e;});
+handle('journal-private',value=>{const e=journal.setPrivate(value.id,value.private);obsidian.sync();return e;});
+handle('obsidian-status',()=>({config:obsidian.config(),status:store.setting('obsidianStatus',{})}));
+handle('obsidian-config',async value=>{if(value?.disable){store.setSetting('obsidian',{...obsidian.config(),enabled:false});return {enabled:false};}const r=await dialog.showOpenDialog(window,{title:'选择 Obsidian 知识库',properties:['openDirectory']});if(r.canceled)return {cancelled:true};return obsidian.configure(r.filePaths[0]);});
+handle('obsidian-sync',()=>obsidian.sync());
+handle('vault-status',()=>privateVault.status());
+handle('vault-unlock',async password=>privateVault.unlock(password));
+handle('vault-lock',()=>privateVault.lock());
+handle('vault-list',query=>privateVault.list(query));
+handle('vault-get',id=>privateVault.get(id));
+handle('vault-save',value=>privateVault.save(value));
+handle('mobile-status',()=>({...mobile.status(),pending:mobileInbox().filter(n=>!n.entryId).map(({id,audioId,receivedAt})=>({id,audioId,receivedAt}))}));
+handle('mobile-config',enabled=>mobile.configure(enabled));
+handle('mobile-pair',async value=>{const address=String(value??mobile.status().addresses[0]??'http://127.0.0.1:43127');const url=new URL(address);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('连接地址无效');url.pathname='/';url.search='';url.hash='pair='+mobile.pairing().token;const link=url.href;const qr=await require('qrcode').toDataURL(link,{width:260,margin:2,color:{dark:'#10130f',light:'#eeeadf'}});return {link,qr};});
+handle('mobile-copy',value=>{const u=new URL(String(value));if(!['http:','https:'].includes(u.protocol))throw Error('连接地址无效');clipboard.writeText(u.href);return {ok:true};});
+handle('update-status',()=>({...updates.state,automatic:store.setting('automaticUpdates',true)}));
+handle('update-config',enabled=>{store.setSetting('automaticUpdates',!!enabled);return {ok:true};});
+handle('update-check',()=>updates.check(true));
+handle('update-install',async()=>{
+  if(testData)throw Error('隔离测试不会替换已安装程序');const staged=await updates.prepare(),application=path.resolve(process.execPath,'../../..');await fsp.access(path.dirname(application),fs.constants.W_OK);const rollback=path.join(updates.directory,'rollback-'+Date.now()+'.app'),script=path.join(updates.directory,'install-update.sh');await fsp.copyFile(path.join(__dirname,'core/install-update.sh'),script);await fsp.chmod(script,0o700);const child=require('node:child_process').spawn('/bin/sh',[script,String(process.pid),application,staged,rollback],{detached:true,stdio:'ignore'});await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});child.unref();app.quit();return {ok:true};
 });
-
-
-handle('life-state',()=>{const data=store.export();return {entries:data.entries.map(e=>({...e,legacy:life.metadata(e)})),decisions:store.setting('decisions',[])};});
-handle('decision-save',value=>{const d=life.normalizeDecision(value),list=store.setting('decisions',[]);if(!d.id)throw Error('选择标识缺失');const index=list.findIndex(x=>x.id===d.id);if(index<0)list.push(d);else list[index]=d;store.setSetting('decisions',list);return {ok:true};});
-handle('record-detail',id=>{const row=store.db.prepare('SELECT id,title,body,occurred_at,kind,meta FROM records WHERE id=?').get(String(id));if(!row)throw Error('记录不存在');return {...row,meta:JSON.parse(row.meta)};});
-handle('record-metadata',value=>{const row=store.db.prepare('SELECT meta FROM records WHERE id=?').get(String(value?.id));if(!row)throw Error('记录不存在');const meta={...JSON.parse(row.meta),...life.metadata(value?.meta),confirmed:value?.confirmed===true};store.db.prepare('UPDATE records SET meta=? WHERE id=?').run(JSON.stringify(meta),String(value.id));return {ok:true};});
-handle('clear',async()=>{const result=await dialog.showMessageBox(window,{type:'warning',title:'清空本机档案',message:'删除本工具中的全部记录和录音？',detail:'电脑与手机中的源文件不受影响。清空后会暂停采集；删除的档案无法撤销，请先导出备份。',buttons:['取消','清空并暂停'],defaultId:0,cancelId:0});if(result.response!==1)return {cancelled:true};collector.cancelled=true;store.setSetting('tracking',false);session=null;if(collector.running)throw new Error('正在停止整理，请稍后再次清空。');store.db.exec("DELETE FROM records; DELETE FROM settings WHERE key LIKE 'file:%';");await fsp.rm(path.join(store.directory,'recordings'),{recursive:true,force:true});return {ok:true};});
-app.on('before-quit',()=>{quitting=true;timers.forEach(clearInterval);if(store){flushSession();collector.cancelled=true;}});
-app.on('window-all-closed',()=>{});
-process.on('uncaughtException',error=>{if(store)try{store.source('system',{name:'运行状态',status:'error',detail:clean(error.message,160)});}catch{};});
+handle('knowledge-list',query=>({cards:journal.cards(query),documents:store.list({source:'manual',query:String(query??'').slice(0,200),limit:100}).records}));
+handle('knowledge-save',value=>journal.addCard(value));
+handle('reminder-settings',async value=>{store.setSetting('journalReminder',prefs(value));if(!getPrefs().enabled)dismissReminder();const schedule=await configureSchedule();return {ok:true,schedule};});
+handle('reminder-test',()=>fireReminder(true));
+handle('reminder-response',action=>{
+  if(testReminder&&action==='close-test'){dismissReminder();return {ok:true};}
+  if(action==='emergency'){store.setSetting('journalReminderState',{snoozeUntil:Date.now()+300000});dismissReminder();return {ok:true};}
+  throw Error('先留下一段真实记录，再完成今天；紧急情况可延后 5 分钟。');
+});
+handle('record-start',async()=>{if(!fakeAudio&&process.platform==='darwin'){const status=systemPreferences.getMediaAccessStatus('microphone');if(status==='denied'||status==='restricted')throw Error('麦克风未授权。请在系统设置 → 隐私与安全性 → 麦克风中允许人生档案；不会反复弹窗。');if(status!=='granted'&&!await systemPreferences.askForMediaAccess('microphone'))throw Error('麦克风未授权，仍可先用文字记录。');}return {allowed:true};});
+handle('record-save',async value=>{
+  const bytes=Buffer.from(value?.bytes??[]);if(bytes.length<20||bytes.length>100*1024*1024)throw Error('录音大小无效，最多 100 MB');const folder=path.join(store.directory,'recordings');await fsp.mkdir(folder,{recursive:true,mode:0o700});const ext=value.mime?.includes('wav')?'wav':value.mime?.includes('mp4')?'m4a':'webm',file=path.join(folder,crypto.randomUUID()+'.'+ext);await fsp.writeFile(file,bytes,{mode:0o600});const a=journal.addAudio({path:file,mime:value.mime||'audio/webm',size:bytes.length});return {ok:true,id:a.id,createdAt:a.createdAt};
+});
+handle('audio-import',async()=>{const r=await dialog.showOpenDialog(window,{title:'选择要转成日记的录音',properties:['openFile'],filters:[{name:'声音文件',extensions:['wav','m4a','mp3','webm','ogg','aac','mp4']}]});if(r.canceled)return {cancelled:true};const input=r.filePaths[0],s=await fsp.stat(input);if(s.size>100*1024*1024)throw Error('录音不能超过 100 MB');const folder=path.join(store.directory,'recordings');await fsp.mkdir(folder,{recursive:true,mode:0o700});const target=path.join(folder,crypto.randomUUID()+path.extname(input).toLowerCase());await fsp.copyFile(input,target);await fsp.chmod(target,0o600);const a=journal.addAudio({path:target,size:s.size,mime:'audio/'+path.extname(input).slice(1)});return {ok:true,id:a.id,createdAt:a.createdAt};});
+async function drainAudio(){
+  if(asrBusy||!audioQueue.length)return;asrBusy=true;const {id,runner}=audioQueue.shift(),a=journal.audio(id);jobs.set(id,{status:'transcribing',startedAt:Date.now()});journal.updateAudio(id,{status:'transcribing'});
+  try{const text=await speech.transcribe(a.path,runner),current=journal.audio(id);journal.updateAudio(id,{status:'ready',transcript:current.transcript??text,latestTranscript:text});jobs.set(id,{status:'ready',text,originalTranscript:current.transcript??text});for(const n of mobileInbox().filter(n=>n.audioId===id&&!n.entryId))finishMobile(n,text);}
+  catch(e){journal.updateAudio(id,{status:'failed'});jobs.set(id,{status:'failed',error:e.message});}
+  finally{asrBusy=false;drainAudio();}
+}
+handle('audio-transcribe',id=>{
+  const a=journal.audio(id);if(!a)throw Error('录音不存在');if(['queued','transcribing'].includes(jobs.get(id)?.status))return {started:true};const runner=speech.findRunner(store.setting('speechRunner',''));if(!runner)throw Error('本地语音识别尚未准备。录音已保存，可先在设置选择转写程序。');
+  jobs.set(id,{status:'queued'});audioQueue.push({id,runner});drainAudio();return {started:true};
+});
+handle('audio-status',id=>{const a=journal.audio(id);if(!a)throw Error('录音不存在');return jobs.get(id)??{status:a.status==='ready'?'ready':'saved',text:a.latestTranscript??a.transcript??''};});
+function mobileInbox(){return store.db.prepare('SELECT payload FROM mobile_inbox').all().map(r=>JSON.parse(r.payload));}
+function putMobile(n){store.db.prepare('INSERT INTO mobile_inbox VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').run(n.id,JSON.stringify(n));}
+function finishMobile(n,transcript=''){
+  if(n.entryId)return n;const ss=[];if(n.text.trim())ss.push({id:crypto.randomUUID(),text:n.text,promptId:'free',source:'text',capturedAt:n.capturedAt});if(n.audioId){const text=transcript||journal.audio(n.audioId)?.transcript;if(!text?.trim())return n;ss.push({id:crypto.randomUUID(),text,promptId:'free',source:'voice',audioId:n.audioId,capturedAt:n.capturedAt});}
+  store.db.exec('BEGIN IMMEDIATE');try{const e=journal.save({title:n.title,segments:ss,keepDraft:true},new Date(n.capturedAt));n.entryId=e.id;n.receivedAt??=new Date().toISOString();putMobile(n);store.db.exec('COMMIT');}catch(e){try{store.db.exec('ROLLBACK');}catch{}throw e;}obsidian.sync();return n;
+}
+function receiveMobile(note){
+  const previous=store.db.prepare('SELECT payload FROM mobile_inbox WHERE id=?').get(note.id);if(previous){const n=JSON.parse(previous.payload);return {received:true,pending:!n.entryId};}
+  let audioId='';if(note.bytes){const folder=path.join(store.directory,'recordings');fs.mkdirSync(folder,{recursive:true,mode:0o700});const ext=note.mime.includes('mp4')?'m4a':note.mime.includes('mpeg')?'mp3':note.mime.includes('wav')?'wav':note.mime.includes('ogg')?'ogg':note.mime.includes('3gpp')?'3gp':'webm',file=path.join(folder,crypto.randomUUID()+'.'+ext);fs.writeFileSync(file,note.bytes,{mode:0o600});audioId=journal.addAudio({path:file,size:note.bytes.length,mime:note.mime}).id;}
+  let n={id:note.id,title:note.title,text:note.text,audioId,capturedAt:note.capturedAt,receivedAt:new Date().toISOString()};putMobile(n);if(!audioId)n=finishMobile(n);else{const runner=speech.findRunner(store.setting('speechRunner',''));if(runner){jobs.set(audioId,{status:'queued'});audioQueue.push({id:audioId,runner});drainAudio();}}return {received:true,pending:!n.entryId};
+}
+handle('audio-play',async id=>{const a=journal.audio(id);if(!a)throw Error('录音不存在');const e=await shell.openPath(a.path);if(e)throw Error(e);return {ok:true};});
+handle('speech-config',async()=>{const r=await dialog.showOpenDialog(window,{title:'选择本地转写程序（FunASR transcribe）',properties:['openFile']});if(r.canceled)return {cancelled:true};if(!speech.findRunner(r.filePaths[0]))throw Error('请选择可执行的本地转写程序');store.setSetting('speechRunner',r.filePaths[0]);return {ok:true};});
+handle('export',async()=>{const folder=await dialog.showOpenDialog(window,{title:'导出完整档案到文件夹',properties:['openDirectory','createDirectory']});if(folder.canceled)return {cancelled:true};const output=path.join(folder.filePaths[0],'人生档案-'+new Date().toISOString().replace(/[:.]/g,'-'));await fsp.mkdir(output,{mode:0o700});await backup(store.db,path.join(output,'archive.sqlite'));await fsp.chmod(path.join(output,'archive.sqlite'),0o600);if(fs.existsSync(privateVault.file))await fsp.copyFile(privateVault.file,path.join(output,'private-vault.json'));for(const folder of ['recordings','attachments']){const source=path.join(store.directory,folder);if(fs.existsSync(source))await fsp.cp(source,path.join(output,folder),{recursive:true});}const data=journal.export();data.audio=data.audio.map(({path:full,...a})=>({...a,file:'recordings/'+path.basename(full)}));await fsp.writeFile(path.join(output,'journal.json'),JSON.stringify(data,null,2),{mode:0o600});for(const e of data.journals)await fsp.writeFile(path.join(output,e.day+'-'+e.id.slice(0,8)+'.md'),journal.markdown(e),{mode:0o600});return {ok:true,path:output};});
+handle('reveal-data',()=>shell.showItemInFolder(store.path));
+handle('legacy-records',value=>store.list({query:String(value?.query??'').slice(0,200),limit:100,offset:Number(value?.offset??0)}));
+handle('open-record',async id=>{const row=store.db.prepare('SELECT path FROM records WHERE id=?').get(String(id));if(!row||!row.path)throw Error('原始文件路径不可用');const error=await shell.openPath(row.path);if(error)throw Error(error);return {ok:true};});
+handle('import',async()=>{const r=await dialog.showOpenDialog(window,{title:'选择自己的笔记或文档',properties:['openFile','multiSelections'],filters:[{name:'笔记与文档',extensions:['txt','md','pdf','docx','xlsx','csv']}]});if(r.canceled)return {cancelled:true};const {extract}=require('./core/documents.cjs');let count=0;for(const file of r.filePaths){const folder=path.join(store.directory,'attachments');await fsp.mkdir(folder,{recursive:true,mode:0o700});const target=path.join(folder,crypto.randomUUID()+path.extname(file).toLowerCase());await fsp.copyFile(file,target);await fsp.chmod(target,0o600);const result=await extract(target);store.add({key:'manual:'+crypto.randomUUID(),source:'manual',kind:'file',title:path.basename(file),body:result.text||'已保留原件，可打开查看。',path:target,meta:{confirmed:true,importedByUser:true,evidence:'使用者主动导入'}});count++;}return {ok:true,count};});
+app.on('before-quit',()=>{quitting=true;privateVault?.lock();mobile?.stop();timers.forEach(clearInterval);});app.on('window-all-closed',()=>{});

@@ -21,3 +21,9 @@ exports/
 *.key
 *.p12
 *.mobileprovision
+
+# Private user material, never part of source or releases
+**/private-vault.json
+recordings/
+attachments/
+journal.json

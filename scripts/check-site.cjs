@@ -46,7 +46,7 @@ const xml=fs.readFileSync(path.join(root,'sitemap.xml'),'utf8');
 const sitemap=new Set([...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map(m=>m[1]));
 assert.deepEqual(sitemap,canonicals,'Sitemap covers exactly the canonical pages');
 const facts=JSON.parse(fs.readFileSync(path.join(root,'facts.json'),'utf8'));
-assert.equal(facts.license,'MIT');assert.equal(facts.free,true);assert.equal(facts.founder.name,'祖仁泽');assert.equal(facts.founder.profileUrl,base.href+'author/');assert.equal(facts.version,require('../package.json').version);
+assert.equal(facts.license,'MIT');assert.equal(facts.free,true);assert.equal(facts.founder.name,'祖仁泽');assert.equal(facts.founder.profileUrl,base.href+'author/');assert.equal(facts.version,JSON.parse(fs.readFileSync(path.join(root,'app/index.html'),'utf8').match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])['@graph'][0].softwareVersion);
 assert.equal(facts.url,base.href);
 assert.equal(fs.readFileSync(path.join(root,'assets/share.png')).subarray(1,4).toString(),'PNG');
 console.log(`Public site check passed: ${files.length} canonical HTML pages, ${links} internal references, valid JSON-LD, sitemap, share image and facts.`);
