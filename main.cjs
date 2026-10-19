@@ -87,7 +87,7 @@ handle('vault-get',id=>privateVault.get(id));
 handle('vault-save',value=>privateVault.save(value));
 handle('mobile-status',()=>({...mobile.status(),pending:mobileInbox().filter(n=>!n.entryId).map(({id,audioId,receivedAt})=>({id,audioId,receivedAt}))}));
 handle('mobile-config',enabled=>mobile.configure(enabled));
-handle('mobile-pair',async value=>{const address=String(value??mobile.status().addresses[0]??'http://127.0.0.1:43127');const url=new URL(address);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('连接地址无效');url.pathname='/';url.search='';url.hash='pair='+mobile.pairing().token;const link=url.href;const qr=await require('qrcode').toDataURL(link,{width:260,margin:2,color:{dark:'#10130f',light:'#eeeadf'}});return {link,qr};});
+handle('mobile-pair',async value=>{const address=String(value??mobile.status().addresses[0]??'http://127.0.0.1:43127');const url=new URL(address);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('连接地址无效');if(url.protocol==='https:')store.setSetting('mobile',{...mobile.config(),privateOrigin:url.origin});url.pathname='/';url.search='';url.hash='pair='+mobile.pairing().token;const link=url.href;const qr=await require('qrcode').toDataURL(link,{width:260,margin:2,color:{dark:'#10130f',light:'#eeeadf'}});return {link,qr};});
 handle('mobile-copy',value=>{const u=new URL(String(value));if(!['http:','https:'].includes(u.protocol))throw Error('连接地址无效');clipboard.writeText(u.href);return {ok:true};});
 handle('update-status',()=>({...updates.state,automatic:store.setting('automaticUpdates',true)}));
 handle('update-config',enabled=>{store.setSetting('automaticUpdates',!!enabled);return {ok:true};});

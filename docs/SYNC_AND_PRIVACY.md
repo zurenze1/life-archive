@@ -29,7 +29,7 @@
 2. 在 Mac 的 Tailscale CLI 执行：
 
    ```sh
-   tailscale serve --bg http://127.0.0.1:43127
+   tailscale serve --bg http://127.0.0.1:47831
    ```
 
 3. 按 Tailscale 官方指引开启私人网络 HTTPS，把得到的 `https://电脑名.网络名.ts.net` 地址填入人生档案的“私人 HTTPS 地址”，重新显示配对码并扫码。
